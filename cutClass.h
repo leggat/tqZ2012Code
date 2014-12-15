@@ -3,11 +3,12 @@
 #include <map>
 #include "plots.h"
 #include <fstream>
+#include "TLorentzVector.h"
 
 class Cuts{
-  bool makeLeptonCuts(AnalysisEvent*,float,std::map<std::string,Plots*>, TH1F*);
-  bool invertIsoCut(AnalysisEvent*,float,std::map<std::string,Plots*>, TH1F*);
-  std::vector<int> makeJetCuts(AnalysisEvent*);
+  bool makeLeptonCuts(AnalysisEvent*,float*,std::map<std::string,Plots*>, TH1F*);
+  bool invertIsoCut(AnalysisEvent*,float*,std::map<std::string,Plots*>, TH1F*);
+  std::vector<int> makeJetCuts(AnalysisEvent*,int);
   std::vector<int> makeMetCuts(AnalysisEvent*);
   std::vector<int> makeBCuts(AnalysisEvent*, std::vector<int>);
   
@@ -30,7 +31,12 @@ class Cuts{
   //Simple deltaR function, because the reco namespace doesn't work or something
   double deltaR(float,float,float,float);
   void dumpToFile(AnalysisEvent * event, int);
-  
+
+  //Function to get lepton SF
+  float getLeptonWeight(AnalysisEvent*);
+  float eleSF(float, float);
+  float muonSF(float, float);
+
   // Tight electron cuts
   unsigned int numTightEle_;
   float tightElePt_;
@@ -83,6 +89,17 @@ class Cuts{
   //For producing post-lepsel skims
   TTree* postLepSelTree_;
 
+  //Some things that will be used for JEC uncertainties.
+  std::vector<float> ptMinJEC_;
+  std::vector<float> ptMaxJEC_;
+  std::vector<float> etaMinJEC_;
+  std::vector<float> etaMaxJEC_;
+  std::vector<std::vector <float> > jecSFUp_;
+  std::vector<std::vector <float> > jecSFDown_;
+  void initialiseJECCors();
+  float getJECUncertainty(float,float,int);
+  TLorentzVector getJetLVec(AnalysisEvent*,int,int);
+
   //Histogram to be used in synchronisation.
   TH1F* synchCutFlowHist_;
   TH1I* synchNumEles_;
@@ -104,7 +121,7 @@ class Cuts{
  public:
   Cuts(bool,bool,bool,bool,bool,bool);
   ~Cuts();
-  bool makeCuts(AnalysisEvent*,float,std::map<std::string,Plots*>, TH1F*);
+  bool makeCuts(AnalysisEvent*,float*,std::map<std::string,Plots*>, TH1F*,int);
   void setTightEle(float pt = 20, float eta = 2.5, float d0 = 0.04);
   void setMC(bool isMC) {isMC_ = isMC;};
   void setCloneTree(TTree* tree) {postLepSelTree_ = tree;};

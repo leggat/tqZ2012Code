@@ -7,7 +7,7 @@
 #include <stdlib.h> 
 #include <libconfig.h++>
 
-int Parser::parse_config(std::string conf, std::vector<Dataset> * datasets, double * lumi,std::vector<std::string>*plotNames,std::vector<float>*xMin,std::vector<float>*xMax,std::vector<int>*nBins,std::vector<std::string>*fillExp,std::vector<std::string>*xAxisLabels,std::vector<int>*cutStage,std::string* cutsConfName,std::string* plotConfName, std::string* outFolder, std::string* postfix){
+int Parser::parse_config(std::string conf, std::vector<Dataset> * datasets, double * lumi,std::vector<std::string>*plotNames,std::vector<float>*xMin,std::vector<float>*xMax,std::vector<int>*nBins,std::vector<std::string>*fillExp,std::vector<std::string>*xAxisLabels,std::vector<int>*cutStage,std::string* cutsConfName,std::string* plotConfName, std::string* outFolder, std::string* postfix, std::string* channel){
   //Re-write config parser here.
   libconfig::Config config;
 
@@ -40,6 +40,7 @@ int Parser::parse_config(std::string conf, std::vector<Dataset> * datasets, doub
   }
   if (*outFolder == "plots/" && root.exists("outputFolder")) root.lookupValue("outputFolder",*outFolder);
   if (*postfix == "default" && root.exists("outputPostfix")) root.lookupValue("outputPostfix",*postfix);
+  if (root.exists("channelName")) root.lookupValue("channelName",*channel);
   //Succesfully parsed everything.
   return 1;
 }

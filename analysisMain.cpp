@@ -150,7 +150,9 @@ static void show_usage(std::string name){
 	    << "\t-t\t\t\t\tDo the tighter muon ID cuts. For synch at the moment, and to see how much of a difference it makes.\n"
 	    << "\t-y\t\t\t\tProduces a file of event dumps for stages of the synch.\n"
 	    << "\t-g\t\t\t\tMakes post-lepSel tree\n"
+	    << "\t-u\t\t\t\tUses post-lepSel trees\n"
 	    << "\t-z  --makeMVATree\t\t\tProduce a tree after event selection for MVA purposes\n"
+	    << "\t-v  --syst  SYST\t\tDo the desired systematic. Brief workaround here, not final yet"
 	    << "\t-h  --help\t\t\tShow this help message\n"
 	    << std::endl;
 }
@@ -169,10 +171,11 @@ int main(int argc, char* argv[]){
   //Various variables that will be used in the analysis. These should really be in a .h file but... I'm lazy. Sorry.
   std::string config = "";
   bool plots = false;
-  double usePreLumi = 0.;
+  double usePreLumi = 20000.;
   long nEvents = 0.;
   std::string outFolder = "plots/";
   std::string postfix = "default";
+  std::string channel = "";
   bool infoDump = false;
   bool invertIsoCut = false; //For z+jets background estimation
   bool synchCutFlow = false; // For synch
@@ -186,6 +189,8 @@ int main(int argc, char* argv[]){
   bool dumpEventNumbers = false;
   bool makePostLepTree = false;
   bool makeMVATree = false;
+  bool usePostLepTree = false;
+  int systToRun = 0;
 
   // variables for plotting. 
   std::vector<std::string> plotNames;
@@ -304,6 +309,19 @@ int main(int argc, char* argv[]){
     else if (arg == "-z" || arg == "--makeMVATree"){
       makeMVATree = true;
     }
+    else if (arg == "-u"){
+      usePostLepTree = true;
+    }
+    else if (arg == "-v" || arg == "--syst"){
+      if (i+1 < argc){
+	systToRun = atoi(argv[++i]);
+      }
+      else{
+	std::cerr << "-v requires an int";
+	return 0;
+      }
+    }
+    
     
     
   } // End command line arguments loop.
@@ -316,10 +334,22 @@ int main(int argc, char* argv[]){
   std::vector<Dataset> datasets;
   double totalLumi = 0;
   double* lumiPtr = &totalLumi;
-  if (!Parser::parse_config(config,&datasets,lumiPtr,&plotNames,&xMin,&xMax,&nBins,&fillExp,&xAxisLabels,&cutStage,cutConfName,plotConfName,&outFolder,&postfix)){
+  if (!Parser::parse_config(config,&datasets,lumiPtr,&plotNames,&xMin,&xMax,&nBins,&fillExp,&xAxisLabels,&cutStage,cutConfName,plotConfName,&outFolder,&postfix,&channel)){
     std::cerr << "There was an error parsing the config file.\n";
     return 0;
   }
+
+  //Making a vector of strings that will give systematics name.
+  std::vector<std::string> systNames;
+  systNames.push_back("");
+  systNames.push_back("__trig__plus");
+  systNames.push_back("__trig__minus");
+  systNames.push_back("__jer__plus");
+  systNames.push_back("__jer__minus");
+  systNames.push_back("__jes__plus");
+  systNames.push_back("__jes__minus");
+  systNames.push_back("__pileup__plus");
+  systNames.push_back("__pileup__minus");
 
   //Make cuts object. The methods in it should perhaps just be i nthe AnalysisEvent class....
   Cuts * cutObj = new Cuts(plots,plots||infoDump,invertIsoCut,synchCutFlow,moreMuonIDCuts,dumpEventNumbers);
@@ -327,6 +357,40 @@ int main(int argc, char* argv[]){
     std::cerr << "There was a problem with parsing the config!" << std::endl;
     return 0;
   };
+  
+  //Make pileupReweighting stuff here
+  TFile * dataPileupFile = new TFile("pileup/truePileupTest.root","READ");
+  TH1F* dataPU = (TH1F*)(dataPileupFile->Get("pileup")->Clone());
+  TFile * mcPileupFile = new TFile("pileup/pileupMC.root","READ");
+  TH1F* mcPU = (TH1F*)(mcPileupFile->Get("pileup")->Clone());
+
+  //Get systematic files too.
+  TFile * systUpFile = new TFile("pileup/truePileupUp.root","READ");
+  TH1F* pileupUpHist = (TH1F*)(systUpFile->Get("pileup")->Clone());
+  TFile * systDownFile = new TFile("pileup/truePileupDown.root","READ");
+  TH1F* pileupDownHist = (TH1F*)(systDownFile->Get("pileup")->Clone());
+
+  TH1F* puReweight = (TH1F*)dataPU->Clone();
+  puReweight->Scale(1.0/puReweight->Integral());
+  mcPU->Scale(1.0/mcPU->Integral());
+  puReweight->Divide(mcPU);
+  puReweight->SetDirectory(0);
+
+  /// And do the same for systematic sampl
+  TH1F* puSystUp = (TH1F*)pileupUpHist->Clone();
+  puSystUp->Scale(1.0/puSystUp->Integral());
+  puSystUp->Divide(mcPU);
+  puSystUp->SetDirectory(0);
+  TH1F* puSystDown = (TH1F*)pileupDownHist->Clone();
+  puSystDown->Scale(1.0/puSystDown->Integral());
+  puSystDown->Divide(mcPU);
+  puSystDown->SetDirectory(0);
+
+  dataPileupFile->Close();
+  mcPileupFile->Close();
+  systUpFile->Close();
+  systDownFile->Close();
+
   //Do a little initialisation for the plots here. Will later on be done in a config file.
   
   //Initialise plot stage names.
@@ -342,35 +406,54 @@ int main(int argc, char* argv[]){
   std::vector<std::string> plotOrder;
   std::map<std::string, datasetInfo> datasetInfos;
 
-  if (usePreLumi) totalLumi = usePreLumi;
+  if (totalLumi == 0.) totalLumi = usePreLumi;
   for (std::vector<Dataset>::iterator dataset = datasets.begin(); dataset!=datasets.end(); ++dataset){
     if (dataset->isMC() && skipMC) continue;
     if (!dataset->isMC() && skipData) continue;
     if (plots||infoDump) { // Initialise a load of stuff that's required by the plotting macro.
-      if (cutFlowMap.find(dataset->getFillHisto()) == cutFlowMap.end()){
-	legOrder.push_back(dataset->getFillHisto());
-	plotOrder.push_back(dataset->getFillHisto());
-	cutFlowMap[dataset->getFillHisto()] = new TH1F((dataset->getFillHisto()+"cutFlow").c_str(),(dataset->getFillHisto()+"cutFlow").c_str(),4,0,4); //Hopefully make this configurable later on. Same deal as the rest of the plots I guess, work out libconfig.
-	datasetInfos[dataset->getFillHisto()] = datasetInfo();
-	datasetInfos[dataset->getFillHisto()].colour = dataset->getColour();
-	datasetInfos[dataset->getFillHisto()].legLabel = dataset->getPlotLabel();
-	datasetInfos[dataset->getFillHisto()].legType = dataset->getPlotType();
-	if (plots){ // Only make all the plots if it's entirely necessary.
-	  plotsMap[dataset->getFillHisto()] = std::map<std::string,Plots*>();
-	  
-	  for (unsigned int j = 0; j < stageNames.size(); j++){
-	    plotsMap[dataset->getFillHisto()][stageNames[j]] = new Plots(plotNames, xMin, xMax,nBins, fillExp, xAxisLabels, cutStage, j, dataset->getFillHisto()+"_"+stageNames[j]);
-	  }
+      int systMask = 1;
+      for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
+	if (systInd > 0 && !(systToRun & systMask)){
+	  systMask = systMask << 1;
+	  continue;
 	}
-      }
+	if (cutFlowMap.find(dataset->getFillHisto()+systNames[systInd]) == cutFlowMap.end()){
+	  legOrder.push_back(dataset->getFillHisto());
+	  plotOrder.push_back(dataset->getFillHisto());
+	  cutFlowMap[dataset->getFillHisto()] = new TH1F((dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),(dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),4,0,4); //Hopefully make this configurable later on. Same deal as the rest of the plots I guess, work out libconfig.
+	  if (systInd == 0){
+	    datasetInfos[dataset->getFillHisto()] = datasetInfo();
+	    datasetInfos[dataset->getFillHisto()].colour = dataset->getColour();
+	    datasetInfos[dataset->getFillHisto()].legLabel = dataset->getPlotLabel();
+	    datasetInfos[dataset->getFillHisto()].legType = dataset->getPlotType();
+	  }
+	  if (plots){ // Only make all the plots if it's entirely necessary.
+	    plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()] = std::map<std::string,Plots*>();
+	  
+	    for (unsigned int j = 0; j < stageNames.size(); j++){
+	      plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()][stageNames[j]] = new Plots(plotNames, xMin, xMax,nBins, fillExp, xAxisLabels, cutStage, j, dataset->getFillHisto()+"_"+stageNames[j]+systNames[systInd]);
+	    }
+	  }
+	}//end cutFlow find loop
+	if (systInd > 0) systMask = systMask << 1;
+      }//end systematic loop
       
     } //end plots if
     //If making either plots or doing the event dump, make cut flow object.
     std::cerr << "Processing dataset " << dataset->name() << std::endl;
     TChain * datasetChain = new TChain(dataset->treeName().c_str());
-    if (!dataset->fillChain(datasetChain,numFiles)){
-      std::cerr << "There was a problem constructing the chain for " << dataset->name() << ". Continuing with next dataset.\n";
-      continue;
+    if (!usePostLepTree){
+      if (!dataset->fillChain(datasetChain,numFiles)){
+	std::cerr << "There was a problem constructing the chain for " << dataset->name() << ". Continuing with next dataset.\n";
+	continue;
+      }
+    }
+    else{
+      std::string inputPostfix = "";
+      inputPostfix += postfix;
+      inputPostfix += invertIsoCut?"invIso":"";
+      std::cout << "skims/"+dataset->name()+inputPostfix + "SmallSkim.root" << std::endl;
+      datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim.root").c_str());
     }
     cutObj->setMC(dataset->isMC());
     cutObj->setEventInfoFlag(readEventList);
@@ -379,6 +462,7 @@ int main(int argc, char* argv[]){
     //extract the dataset weight.
 
     float datasetWeight = dataset->getDatasetWeight(totalLumi);
+    //Apply trigger SF here. Also does systematic for trigger +-
     if (infoDump) datasetWeight = 1;
     std::cout << datasetChain->GetEntries() << " number of items in tree. Dataset weight: " << datasetWeight << std::endl;
     AnalysisEvent * event = new AnalysisEvent(dataset->isMC(),dataset->getTriggerFlag(),datasetChain);
@@ -390,19 +474,43 @@ int main(int argc, char* argv[]){
       cutObj->setCloneTree(cloneTree);
     }
     //If we're making the MVA tree, set it up here. 
-    TTree * mvaTree = 0;
+    std::vector<TTree *> mvaTree;
+    //Add a few variables into the MVA tree for easy access of stuff like lepton index etc
     float eventWeight = 0;
-    TBranch * eventWeightBranch = 0;
+    int zLep1Index = -1; // Addresses in elePF2PATWhatever of the z lepton
+    int zLep2Index = -1;
+    int wLepIndex = -1;
+    int jetInd[15];  // The index of the selected jets;
+    int bJetInd[10]; // Index of selected b-jets;
+    //Now add in the branches:
+    
     if (makeMVATree){
-      mvaTree = datasetChain->CloneTree(0);
-      eventWeightBranch = mvaTree->Branch("eventWeight", &eventWeight, "eventWeight/F");
+      int systMask = 1;
+      std::cout << "Making systematic trees for " << dataset->name() << ": ";
+      for (unsigned int systIn = 0; systIn < systNames.size(); systIn++){
+	std::cout << systNames[systIn] << " ";
+	//	std::cout << "Making systs: " << systMask << " " << systToRun << " " << systIn << " " << (systMask & systToRun) << std::endl;
+	/*	if (systIn > 0 && !(systMask & systToRun)){
+	  if (systIn > 0) systMask = systMask << 1;
+	  continue;
+	  }*/
+	mvaTree.push_back(datasetChain->CloneTree(0));
+	mvaTree[systIn]->SetName((mvaTree[systIn]->GetName()+systNames[systIn]).c_str());
+	mvaTree[systIn]->Branch("eventWeight", &eventWeight, "eventWeight/F");
+	mvaTree[systIn]->Branch("zLep1Index",&zLep1Index,"zLep1Index/I");
+	mvaTree[systIn]->Branch("zLep2Index",&zLep2Index,"zLep2Index/I");
+	mvaTree[systIn]->Branch("wLepIndex",&wLepIndex,"wLepIndex/I");
+	mvaTree[systIn]->Branch("jetInd",jetInd,"jetInd[15]/I");
+	mvaTree[systIn]->Branch("bJetInd",bJetInd,"jetInd[10]/I");
+
+	if (systIn > 0) systMask = systMask << 1;
+      }
+      std::cout <<std::endl;
     }
     else{
       event->fChain->SetBranchStatus("*",0); //Should disable most branches.
       setBranchStatusAll(event->fChain,dataset->isMC(),dataset->getTriggerFlag());
     }
-
-
 
     int numberOfEvents = datasetChain->GetEntries();
     if (nEvents && nEvents < numberOfEvents) numberOfEvents = nEvents;
@@ -413,40 +521,94 @@ int main(int argc, char* argv[]){
     for (int i = 0; i < numberOfEvents; i++){
       if (i % 500 < 0.01) std::cerr << i << " (" << 100*float(i)/numberOfEvents << "%) with " << event->numElePF2PAT << " electrons. Found " << (synchCutFlow?cutObj->numFound():foundEvents) << " events.\r";
       event->GetEntry(i);
-      eventWeight = event->getEventWeight(i);
-      if (infoDump) eventWeight = 1;
-      if (readEventList) {
-	bool tempBool = false;
-	for (unsigned int i = 0; i < eventNumbers.size(); i++){
-	  if (eventNumbers[i] == event->eventNum) {
-	    tempBool = true;
-	    break;
+      //Do the systematics indicated by the systematic flag, oooor just do data if that's your thing. Whatevs.
+      int systMask = 1;
+      for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
+	if (!dataset->isMC() && systInd > 0) break;
+	//	std::cout << systInd << " " << systMask << std::endl;
+	if (systInd > 0 && !(systMask & systToRun)) {
+	  if (systInd > 0) systMask = systMask << 1;
+	  continue;
+	}
+	eventWeight = event->getEventWeight(i);
+	//apply trigger weights here.
+	if (dataset->isMC()){
+	  float pileupWeight = puReweight->GetBinContent(puReweight->GetXaxis()->FindBin(event->numVert));
+	  if (systMask == 64) pileupWeight = puSystUp->GetBinContent(puSystUp->GetXaxis()->FindBin(event->numVert));
+	  if (systMask == 128) pileupWeight = puSystDown->GetBinContent(puSystDown->GetXaxis()->FindBin(event->numVert));
+	  eventWeight *= pileupWeight;
+	  if (channel == "eee"){
+	    float twgt = 0.9975;
+	    if (systInd > 0 && (systMask == 1)) twgt += 0.0455;
+	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0354;
+	    eventWeight *= twgt;
+	  }
+	  else if (channel == "eemu"){
+	    float twgt = 0.9451;
+	    if (systInd > 0 && (systMask == 1)) twgt += 0.0394;
+	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0408;
+	    eventWeight *= twgt;
+	  }
+	  if (channel == "emumu"){
+	    float twgt = 0.9001;
+	    if (systInd > 0 && (systMask == 1)) twgt += 0.0565;
+	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0422;
+	    eventWeight *= twgt;
+	  }
+	  if (channel == "mumumu"){
+	    float twgt = 0.9871;
+	    if (systInd > 0 && (systMask == 1)) twgt += 0.0242;
+	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0212;
+	    eventWeight *= twgt;
 	  }
 	}
-	if (!tempBool) continue;
-	std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << datasetChain->GetFile()->GetName() << std::endl;
-	cutObj->dumpLooseLepInfo(event);
-	cutObj->dumpLeptonInfo(event);
+
+	if (infoDump) eventWeight = 1;
+	if (readEventList) {
+	  bool tempBool = false;
+	  for (unsigned int i = 0; i < eventNumbers.size(); i++){
+	    if (eventNumbers[i] == event->eventNum) {
+	      tempBool = true;
+	      break;
+	    }
+	  }
+	  if (!tempBool) continue;
+	  std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << datasetChain->GetFile()->GetName() << std::endl;
+	  cutObj->dumpLooseLepInfo(event);
+	  cutObj->dumpLeptonInfo(event);
 	
-      }
-      if (!cutObj->makeCuts(event,datasetWeight*eventWeight,plotsMap[dataset->getFillHisto()],cutFlowMap[dataset->getFillHisto()]))continue;
-      //      if (synchCutFlow){
-      //	std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << std::endl;
-      //}
-      if (makeMVATree){
-	eventWeight *= datasetWeight;
-	mvaTree->Fill();
-	std::cout << std::setprecision(7);
-	std::cout << eventWeight << std::endl;
-	eventWeightBranch->Fill();
-      }
-      foundEvents++;
-      
+	}
+	eventWeight*=datasetWeight;
+	if (!cutObj->makeCuts(event,&eventWeight,plotsMap[dataset->getFillHisto()+systNames[systInd]],cutFlowMap[dataset->getFillHisto()+systNames[systInd]],systInd?systMask:systInd)) {
+	  if (systInd) systMask = systMask << 1;
+	  continue;
+	}
+	//      if (synchCutFlow){
+	//	std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << std::endl;
+	//}
+	if (makeMVATree){
+	  zLep1Index = event->zPairIndex.first;
+	  zLep2Index = event->zPairIndex.second;
+	  wLepIndex = event->wLepIndex;
+	  for (unsigned int jetIndexIt = 0; jetIndexIt < 15; jetIndexIt++){
+	    if (jetIndexIt < event->jetIndex.size()) jetInd[jetIndexIt] = event->jetIndex[jetIndexIt];
+	    else jetInd[jetIndexIt] = -1;
+	  }
+	  for (unsigned int bJetIt = 0; bJetIt < 10; bJetIt++){
+	    if (bJetIt < event->bTagIndex.size()) bJetInd[bJetIt] = event->bTagIndex[bJetIt];
+	    else bJetInd[bJetIt] = -1;
+	  }
+	  mvaTree[systInd]->Fill();
+	  
+	}
+	foundEvents++;
+	if (systInd > 0) systMask = systMask << 1;
+      }// End systematics loop.
     } //end event loop
 
     //If we're making post lepSel skims save the tree here
     if (makePostLepTree){
-      TFile outFile(("skims/"+dataset->name() + postfix +"SmallSkim.root").c_str(),"RECREATE");
+      TFile outFile(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim.root").c_str(),"RECREATE");
       outFile.cd();
       std::cout << "\nPrinting some info on the tree " <<dataset->name() << " " << cloneTree->GetEntries() << std::endl;
       std::cout << "But there were :" <<  datasetChain->GetEntries() << " entries in the original tree" << std::endl;
@@ -455,13 +617,32 @@ int main(int argc, char* argv[]){
       outFile.Close();
       delete cloneTree;
     }
+
+
+    
+    //Save mva outputs
     if (makeMVATree){
-      TFile mvaOutFile(("mvaTrees/" + dataset->name() + postfix + (invertIsoCut?"invIso":"") + "mvaOut.root").c_str(),"RECREATE");
+      TFile mvaOutFile(("mvaTest/" + dataset->name() + postfix + (invertIsoCut?"invIso":"")  +  "mvaOut.root").c_str(),"RECREATE");
       mvaOutFile.cd();
-      mvaTree->Write();
+      std::cout << std::endl;
+      int systMask = 1;
+      std::cout << "Saving Systematics: ";
+      for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
+	if (systInd > 0 && !(systToRun & systMask)){
+	  systMask = systMask << 1;
+	  continue;
+	}
+	std::cout << systNames[systInd] << ": " << mvaTree[systInd]->GetEntriesFast() << " ";
+	mvaTree[systInd]->Write();
+	if (systInd > 0) systMask = systMask << 1;
+	if (!dataset->isMC()) break;
+      }
+      std::cout << std::endl;
       mvaOutFile.Write();
       mvaOutFile.Close();
-      delete mvaTree;
+      for (unsigned int i = 0; i < mvaTree.size(); i++){
+	delete mvaTree[i];
+      }
     }
     if (infoDump){
       std::cout << "In dataset " << dataset->getFillHisto() << " the cut flow looks like:" << std::endl;
@@ -516,7 +697,15 @@ int main(int argc, char* argv[]){
       delete cutFlowMap[dataset->getFillHisto()];
       if (!plots) continue;
       for (unsigned int j = 0; j < stageNames.size(); j++){
-	delete plotsMap[dataset->getFillHisto()][stageNames[j]];
+	int systMask = 1;
+	for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
+	  if (systInd > 0 && !(systInd & systMask)) {
+	    systMask = systMask << 1;
+	    continue;
+	  }
+	  delete plotsMap[dataset->getFillHisto()+systNames[systInd]][stageNames[j]];
+	  if (systInd > 0) systMask = systMask << 1;
+	}
       }
     }
 

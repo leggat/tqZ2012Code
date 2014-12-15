@@ -317,6 +317,7 @@ public :
    Double_t        PileUpWeightRunA;
    Double_t        PileUpWeightRunB;
    Double_t        PileUpWeightRunC;
+   //   Int_t           numVert;
    Int_t           HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v12;
    Int_t           HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v13;
    Int_t           HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v14;
@@ -674,6 +675,7 @@ public :
    TBranch        *b_nTriggerBits;   //!
    TBranch        *b_TriggerBits;   //!
    TBranch        *b_pileUpWeight;   //!
+   //   TBranch        *b_numVert;    //!
    TBranch        *b_HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v12;   //!
    TBranch        *b_HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v13;   //!
    TBranch        *b_HLT_Ele17_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_Ele8_CaloIdT_CaloIsoVL_TrkIdVL_TrkIsoVL_v14;   //!
@@ -743,8 +745,12 @@ public :
    std::vector<int> bTagIndex; 
    std::pair<TLorentzVector,TLorentzVector> zPairLeptons;
    std::pair<float,float> zPairRelIso;
+   std::pair<int,int> zPairIndex; 
    TLorentzVector wLepton;
+   int wLepIndex;
    float wLeptonRelIso;
+   Int_t numVert;
+   TBranch * b_numVert;
 
    AnalysisEvent(bool isMC = true, std::string triggerFlag = "", TTree *tree=0);
    virtual ~AnalysisEvent();
@@ -1339,11 +1345,13 @@ void AnalysisEvent::Init(bool isMC, std::string triggerFlag, TTree *tree)
    fChain->SetBranchAddress("eventRun", &eventRun, &b_eventRun);
    fChain->SetBranchAddress("eventNum", &eventNum, &b_eventNum);
    fChain->SetBranchAddress("eventLumiblock", &eventLumiblock, &b_eventLumiblock);
+   fChain->SetBranchAddress("numVert", &numVert, &b_numVert);
    Notify();
 }
 
 Bool_t AnalysisEvent::Notify()
 {
+  //  std::cout << "Does the notify." << std::endl;
    // The Notify() function is called when a new file is opened. This
    // can be either for a new TTree in a TChain or when when a new TTree
    // is started when using PROOF. It is normally not necessary to make changes
