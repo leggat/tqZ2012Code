@@ -88,6 +88,7 @@ class Cuts{
 
   //For producing post-lepsel skims
   TTree* postLepSelTree_;
+  TTree* postLepSelTree2_;
 
   //Some things that will be used for JEC uncertainties.
   std::vector<float> ptMinJEC_;
@@ -124,7 +125,7 @@ class Cuts{
   bool makeCuts(AnalysisEvent*,float*,std::map<std::string,Plots*>, TH1F*,int);
   void setTightEle(float pt = 20, float eta = 2.5, float d0 = 0.04);
   void setMC(bool isMC) {isMC_ = isMC;};
-  void setCloneTree(TTree* tree) {postLepSelTree_ = tree;};
+  void setCloneTree(TTree* tree, TTree* tree2) {postLepSelTree_ = tree; postLepSelTree2_ = tree2;};
   void setTriggerFlag(std::string triggerFlag) {triggerFlag_ = triggerFlag;};
   bool parse_config(std::string);
   void dumpLeptonInfo(AnalysisEvent*);

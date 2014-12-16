@@ -13,6 +13,7 @@
 #include "histogramPlotter.h"
 #include <iomanip>
 #include <map>
+#include <math.h>
 
 //This method is here to set up a load of branches in the TTrees that I will be analysing. Because it's vastly quicker to not load the whole damned thing.
 void setBranchStatusAll(TTree * chain, bool isMC, std::string triggerFlag){
@@ -454,6 +455,8 @@ int main(int argc, char* argv[]){
       inputPostfix += invertIsoCut?"invIso":"";
       std::cout << "skims/"+dataset->name()+inputPostfix + "SmallSkim.root" << std::endl;
       datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim.root").c_str());
+      std::ifstream secondTree(("skims/"+dataset->name()+inputPostfix + "SmallSkim1.root").c_str());
+      if (secondTree.good()) datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim1.root").c_str());
     }
     cutObj->setMC(dataset->isMC());
     cutObj->setEventInfoFlag(readEventList);
@@ -469,9 +472,11 @@ int main(int argc, char* argv[]){
 
     //Adding in some stuff here to make a skim file out of post lep sel stuff
     TTree * cloneTree = 0;
+    TTree * cloneTree2 = 0;
     if (makePostLepTree){
       cloneTree = datasetChain->CloneTree(0);
-      cutObj->setCloneTree(cloneTree);
+      cloneTree2 = datasetChain->CloneTree(0);
+      cutObj->setCloneTree(cloneTree,cloneTree2);
     }
     //If we're making the MVA tree, set it up here. 
     std::vector<TTree *> mvaTree;
@@ -601,6 +606,7 @@ int main(int argc, char* argv[]){
 	  mvaTree[systInd]->Fill();
 	  
 	}
+
 	foundEvents++;
 	if (systInd > 0) systMask = systMask << 1;
       }// End systematics loop.
@@ -616,6 +622,16 @@ int main(int argc, char* argv[]){
       outFile.Write();
       outFile.Close();
       delete cloneTree;
+
+      //If we have any events in the second tree:
+      if (cloneTree2->GetEntriesFast() > 0){
+	TFile outFile1(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim1.root").c_str(),"RECREATE");
+	outFile1.cd();
+	cloneTree2->Write();
+	outFile1.Write();
+	outFile1.Close();
+      }
+      delete cloneTree2;
     }
 
 
@@ -632,7 +648,7 @@ int main(int argc, char* argv[]){
 	  systMask = systMask << 1;
 	  continue;
 	}
-	std::cout << systNames[systInd] << ": " << mvaTree[systInd]->GetEntriesFast() << " ";
+	std::cout << systNames[systInd] << ": " << mvaTree[systInd]->GetEntriesFast() << " " << std::flush;
 	mvaTree[systInd]->Write();
 	if (systInd > 0) systMask = systMask << 1;
 	if (!dataset->isMC()) break;

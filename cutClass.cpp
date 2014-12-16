@@ -61,7 +61,8 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   //Same for trigger flag.
   triggerFlag_(""),
   //Make cloned tree false for now
-  postLepSelTree_(0)
+  postLepSelTree_(0),
+  postLepSelTree2_(0)
 {
   //Space here in case other stuff needs to be done.
   //If doing synchronisation., initialise that here.
@@ -172,7 +173,8 @@ bool Cuts::makeCuts(AnalysisEvent *event, float *eventWeight, std::map<std::stri
 
   //This is to make some skims for faster running. Do lepSel and save some files.
   if(postLepSelTree_) {
-    postLepSelTree_->Fill();
+    if (postLepSelTree_->GetEntriesFast() < 40000) postLepSelTree_->Fill();
+    else postLepSelTree2_->Fill();
   }
 
   event->jetIndex = makeJetCuts(event, systToRun);
@@ -394,11 +396,9 @@ std::vector<int> Cuts::makeJetCuts(AnalysisEvent *event, int syst){
   //  std::cout << event->eventNum << std::endl << "Jets: " << std::endl;
   for (int i = 0; i < event->numJetPF2PAT; i++){
     //if (std::sqrt(event->jetPF2PATPx[i] * event->jetPF2PATPx[i] + event->jetPF2PATPy[i] * event->jetPF2PATPy[i]) < jetPt_) continue;
-    float jetPx = event->jetPF2PATPx[i], jetPy = event->jetPF2PATPy[i];
     TLorentzVector jetVec = getJetLVec(event,i,syst);
     //    std::cout << getJECUncertainty(sqrt(jetPx*jetPx + jetPy*jetPy), event->jetPF2PATEta[i],syst) << " " << syst << std::endl;
-    float jetPt = (1 + getJECUncertainty(jetVec.Pt(), jetVec.Eta(),syst)) * jetVec.Pt();
-    if (jetPt < jetPt_) continue;
+    if (jetVec.Pt() < jetPt_) continue;
     if (std::abs(jetVec.Eta()) > jetEta_) continue;
     if (event->jetPF2PATNConstituents[i] < jetNConsts_) continue;
     //std::cerr << ((event->jetPF2PATNeutralHadronEnergyFractionCorr[i] < 0.99 && event->jetPF2PATNeutralEmEnergyFractionCorr[i] < 0.99)) << "\t" << std::abs(event->jetPF2PATEta[i]) << "\t" <<  (event->jetPF2PATChargedEmEnergyFraction[i] < 0.99) <<  "\t" << (event->jetPF2PATChargedHadronEnergyFraction[i] > 0.) << "\t" << (event->jetPF2PATChargedMultiplicity[i] > 0.)  << "\t" << ((event->jetPF2PATNeutralHadronEnergyFractionCorr[i] < 0.99 && event->jetPF2PATNeutralEmEnergyFractionCorr[i] < 0.99) && ((std::abs(event->jetPF2PATEta[i]) > 2.4) || (event->jetPF2PATChargedEmEnergyFraction[i] < 0.99 && event->jetPF2PATChargedHadronEnergyFraction[i] > 0. && event->jetPF2PATChargedMultiplicity[i] > 0.))) << std::endl;
@@ -1081,7 +1081,7 @@ TLorentzVector Cuts::getJetLVec(AnalysisEvent* event, int index, int syst){
   else if (fabs(event->jetPF2PATEta[index]) <= 2.3) oldSmearCorr = 0.096;
   else oldSmearCorr = 0.166;
   float oldSmearValue = 1.0;
-  if (event->genJetPF2PATPT[index] > -990.) oldSmearValue = std::max(0.0, event->jetPF2PATPtRaw[index] + (event->jetPF2PATPtRaw[index] - event->genJetPF2PATPT[index]) * oldSmearCorr)/event->jetPF2PATPtRaw[index];
+  if (isMC_ && event->genJetPF2PATPT[index] > -990.) oldSmearValue = std::max(0.0, event->jetPF2PATPtRaw[index] + (event->jetPF2PATPtRaw[index] - event->genJetPF2PATPT[index]) * oldSmearCorr)/event->jetPF2PATPtRaw[index];
   float newJECCorr = 0.;
   if (fabs(event->jetPF2PATEta[index]) <= 0.5) {
     newJECCorr = 1.079;
@@ -1119,11 +1119,18 @@ TLorentzVector Cuts::getJetLVec(AnalysisEvent* event, int index, int syst){
     else if (syst == 32) newJECCorr = 0.865;
   }
   float newSmearValue = 1.0;
-  if (event->genJetPF2PATPT[index] > -990.) newSmearValue = std::max(0.0, event->jetPF2PATPtRaw[index] + (event->jetPF2PATPtRaw[index] - event->genJetPF2PATPT[index]) * newJECCorr)/event->jetPF2PATPtRaw[index];
+  if (isMC_ && event->genJetPF2PATPT[index] > -990.) newSmearValue = std::max(0.0, event->jetPF2PATPtRaw[index] + (event->jetPF2PATPtRaw[index] - event->genJetPF2PATPT[index]) * newJECCorr)/event->jetPF2PATPtRaw[index];
   //  std::cout << event->jetPF2PATPtRaw[index] << std::setprecision(7) << " " << oldSmearValue << " " << newSmearValue << std::endl;
   TLorentzVector returnJet;
-  if (newSmearValue < 0.01) returnJet.SetPxPyPzE(0.01,0.01,0.01,0.01);
+  if (newSmearValue < 0.01) {
+    returnJet.SetPxPyPzE(0.01,0.01,0.01,0.01);
+    return returnJet;
+  }
   else returnJet.SetPxPyPzE(newSmearValue*event->jetPF2PATPx[index]/oldSmearValue,newSmearValue*event->jetPF2PATPy[index]/oldSmearValue,newSmearValue*event->jetPF2PATPz[index]/oldSmearValue,newSmearValue*event->jetPF2PATE[index]/oldSmearValue);
+  if (isMC_){
+    float jerUncer = getJECUncertainty(returnJet.Pt(),returnJet.Eta(),syst);
+    returnJet *= 1+jerUncer;
+  }
   //  if (returnJet.Pt() == 0.) std::cout << event->jetPF2PATPtRaw[index]  << " " << event->genJetPF2PATPT[index] << " " << event->jetPF2PATPx[index] << " " << event->jetPF2PATPy[index] << " " << event->jetPF2PATPz[index] << " " << event->jetPF2PATE[index] << " " << oldSmearValue << " " << newSmearValue <<std::endl;
   return returnJet;
 
