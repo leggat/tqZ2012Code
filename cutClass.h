@@ -2,6 +2,7 @@
 #include <vector>
 #include <map>
 #include "plots.h"
+#include "TH2.h"
 #include <fstream>
 #include "TLorentzVector.h"
 
@@ -90,6 +91,12 @@ class Cuts{
   TTree* postLepSelTree_;
   TTree* postLepSelTree2_;
 
+  //For making b-tagging efficiencies. Needed for reweighting and systematics.
+  bool makeBTagEffPlots_;
+  //And the efficiency plots.
+  std::vector<TH2D*> bTagEffPlots_;
+  
+
   //Some things that will be used for JEC uncertainties.
   std::vector<float> ptMinJEC_;
   std::vector<float> ptMaxJEC_;
@@ -127,6 +134,7 @@ class Cuts{
   void setMC(bool isMC) {isMC_ = isMC;};
   void setCloneTree(TTree* tree, TTree* tree2) {postLepSelTree_ = tree; postLepSelTree2_ = tree2;};
   void setTriggerFlag(std::string triggerFlag) {triggerFlag_ = triggerFlag;};
+  void setBTagPlots(std::vector<TH2D*> vec) {makeBTagEffPlots_ = true; bTagEffPlots_ = vec;};
   bool parse_config(std::string);
   void dumpLeptonInfo(AnalysisEvent*);
   void dumpLooseLepInfo(AnalysisEvent*);

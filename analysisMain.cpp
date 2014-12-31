@@ -4,6 +4,7 @@
 #include <vector>
 #include <stdlib.h> 
 #include "TH1.h"
+#include "TH2.h"
 #include "TCanvas.h"
 #include "TPad.h"
 #include "config_parser.h"
@@ -154,6 +155,7 @@ static void show_usage(std::string name){
 	    << "\t-u\t\t\t\tUses post-lepSel trees\n"
 	    << "\t-z  --makeMVATree\t\t\tProduce a tree after event selection for MVA purposes\n"
 	    << "\t-v  --syst  SYST\t\tDo the desired systematic. Brief workaround here, not final yet"
+	    << "\t-j\t\t\t\tMake b-tagging efficiency histograms. Probably doesn't need to be run too many times.\n"
 	    << "\t-h  --help\t\t\tShow this help message\n"
 	    << std::endl;
 }
@@ -192,6 +194,7 @@ int main(int argc, char* argv[]){
   bool makeMVATree = false;
   bool usePostLepTree = false;
   int systToRun = 0;
+  bool makeBTagEffPlots = false;
 
   // variables for plotting. 
   std::vector<std::string> plotNames;
@@ -321,6 +324,9 @@ int main(int argc, char* argv[]){
 	std::cerr << "-v requires an int";
 	return 0;
       }
+    }
+    else if (arg == "-j"){
+      makeBTagEffPlots = true;
     }
     
     
@@ -462,9 +468,25 @@ int main(int argc, char* argv[]){
     cutObj->setEventInfoFlag(readEventList);
     cutObj->setTriggerFlag(dataset->getTriggerFlag());
     std::cout << "Trigger flag: " << dataset->getTriggerFlag() << std::endl;
-    //extract the dataset weight.
 
+    //Here we will initialise the b-tag eff plots if we are doing b-tag efficiencies
+    std::vector<TH2D*> bTagEffPlots;
+    if (makeBTagEffPlots && dataset->isMC()){
+      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_b","bTagEff_Denom_b",4,0,200,4,0,2.4));
+      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_c","bTagEff_Denom_c",4,0,200,4,0,2.4));
+      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_uds","bTagEff_Denom_uds",4,0,200,4,0,2.4));
+      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_g","bTagEff_Denom_g",4,0,200,4,0,2.4));
+      bTagEffPlots.push_back(new TH2D("bTagEff_Num_b","bTagEff_Num_b",4,0,200,4,0,2.4));
+      bTagEffPlots.push_back(new TH2D("bTagEff_Num_c","bTagEff_Num_c",4,0,200,4,0,2.4));
+      bTagEffPlots.push_back(new TH2D("bTagEff_Num_uds","bTagEff_Num_uds",4,0,200,4,0,2.4));
+      bTagEffPlots.push_back(new TH2D("bTagEff_Num_g","bTagEff_Num_g",4,0,200,4,0,2.4));
+      cutObj->setBTagPlots(bTagEffPlots);
+    }//end btag eff plots
+
+    //extract the dataset weight.
     float datasetWeight = dataset->getDatasetWeight(totalLumi);
+
+
     //Apply trigger SF here. Also does systematic for trigger +-
     if (infoDump) datasetWeight = 1;
     std::cout << datasetChain->GetEntries() << " number of items in tree. Dataset weight: " << datasetWeight << std::endl;
@@ -619,6 +641,12 @@ int main(int argc, char* argv[]){
       std::cout << "\nPrinting some info on the tree " <<dataset->name() << " " << cloneTree->GetEntries() << std::endl;
       std::cout << "But there were :" <<  datasetChain->GetEntries() << " entries in the original tree" << std::endl;
       cloneTree->Write();
+      //If we're doing b-tag efficiencies, let's save them here.
+      if (makeBTagEffPlots){
+	for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
+	  bTagEffPlots[i]->Write();
+	}
+      }
       outFile.Write();
       outFile.Close();
       delete cloneTree;
@@ -654,6 +682,12 @@ int main(int argc, char* argv[]){
 	if (!dataset->isMC()) break;
       }
       std::cout << std::endl;
+      //Save the efficiency plots for b-tagging here if we're doing that.
+      if (makeBTagEffPlots){
+	for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
+	  bTagEffPlots[i]->Write();
+	}
+      }
       mvaOutFile.Write();
       mvaOutFile.Close();
       for (unsigned int i = 0; i < mvaTree.size(); i++){
@@ -667,6 +701,12 @@ int main(int argc, char* argv[]){
       }
     }
     std::cerr << "\nFound " << foundEvents << " in " << dataset->name() << std::endl;
+    //Delete plots from out btag vector. Avoid memory leaks, kids.
+    if (makeBTagEffPlots){
+      for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
+	delete bTagEffPlots[i];
+      }
+    }
     //datasetChain->MakeClass("AnalysisEvent");
     delete datasetChain;
   } //end dataset loop

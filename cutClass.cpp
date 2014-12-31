@@ -62,7 +62,9 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   triggerFlag_(""),
   //Make cloned tree false for now
   postLepSelTree_(0),
-  postLepSelTree2_(0)
+  postLepSelTree2_(0),
+  //Are we making b-tag efficiency plots?
+  makeBTagEffPlots_(false)
 {
   //Space here in case other stuff needs to be done.
   //If doing synchronisation., initialise that here.
@@ -425,6 +427,29 @@ std::vector<int> Cuts::makeJetCuts(AnalysisEvent *event, int syst){
     //std::cout << event->jetPF2PATPtRaw[i] << " " << deltaLep << std::endl;
     if (deltaLep < 0.5) continue;
     //    if (event->jetPF2PATdRClosestLepton[i] < 0.5) continue;
+    if (isMC_ && makeBTagEffPlots_){
+      //Fill eff info here if needed.
+      if (std::abs(event->jetPF2PATPID[i]) == 5){ // b-jets
+	bTagEffPlots_[0]->Fill(jetVec.Pt(),jetVec.Eta());
+	if (event->jetPF2PATBDiscriminator[i] > bDiscCut_)
+	  bTagEffPlots_[4]->Fill(jetVec.Pt(),jetVec.Eta());
+      }
+      if (std::abs(event->jetPF2PATPID[i]) == 4){ // charm 
+	bTagEffPlots_[1]->Fill(jetVec.Pt(),jetVec.Eta());
+	if (event->jetPF2PATBDiscriminator[i] > bDiscCut_)
+	  bTagEffPlots_[5]->Fill(jetVec.Pt(),jetVec.Eta());
+      }
+      if (std::abs(event->jetPF2PATPID[i]) > 0 && std::abs(event->jetPF2PATPID[i]) < 4){ // light jets
+	bTagEffPlots_[2]->Fill(jetVec.Pt(),jetVec.Eta());
+	if (event->jetPF2PATBDiscriminator[i] > bDiscCut_)
+	  bTagEffPlots_[6]->Fill(jetVec.Pt(),jetVec.Eta());
+      }
+      if (std::abs(event->jetPF2PATPID[i]) == 21){ // gluons
+	bTagEffPlots_[3]->Fill(jetVec.Pt(),jetVec.Eta());
+	if (event->jetPF2PATBDiscriminator[i] > bDiscCut_)
+	  bTagEffPlots_[7]->Fill(jetVec.Pt(),jetVec.Eta());
+      }
+    }
     jets.push_back(i);
   }
   return jets;
