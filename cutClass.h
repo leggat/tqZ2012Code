@@ -9,7 +9,7 @@
 class Cuts{
   bool makeLeptonCuts(AnalysisEvent*,float*,std::map<std::string,Plots*>, TH1F*);
   bool invertIsoCut(AnalysisEvent*,float*,std::map<std::string,Plots*>, TH1F*);
-  std::vector<int> makeJetCuts(AnalysisEvent*,int);
+  std::vector<int> makeJetCuts(AnalysisEvent*,int,float*);
   std::vector<int> makeMetCuts(AnalysisEvent*);
   std::vector<int> makeBCuts(AnalysisEvent*, std::vector<int>);
   
@@ -84,7 +84,6 @@ class Cuts{
   bool fillCutFlow_; // Fill cut flows
   bool invertIsoCut_; // For background estimation
   bool synchCutFlow_; //For synch
-  bool tighterMuonID_; //Tighter muon ID.
   bool singleEventInfoDump_; //For dropping info on event for synching.
 
   //For producing post-lepsel skims
@@ -95,7 +94,8 @@ class Cuts{
   bool makeBTagEffPlots_;
   //And the efficiency plots.
   std::vector<TH2D*> bTagEffPlots_;
-  
+  bool getBTagWeight_;
+  void getBWeight(AnalysisEvent *, TLorentzVector, int, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*);
 
   //Some things that will be used for JEC uncertainties.
   std::vector<float> ptMinJEC_;
@@ -107,6 +107,8 @@ class Cuts{
   void initialiseJECCors();
   float getJECUncertainty(float,float,int);
   TLorentzVector getJetLVec(AnalysisEvent*,int,int);
+  int getptbin_for_btag(float);
+  std::vector<float> SFb_error;
 
   //Histogram to be used in synchronisation.
   TH1F* synchCutFlowHist_;
@@ -127,14 +129,14 @@ class Cuts{
   std::string cutConfTrigLabel_;
 
  public:
-  Cuts(bool,bool,bool,bool,bool,bool);
+  Cuts(bool,bool,bool,bool,bool);
   ~Cuts();
   bool makeCuts(AnalysisEvent*,float*,std::map<std::string,Plots*>, TH1F*,int);
   void setTightEle(float pt = 20, float eta = 2.5, float d0 = 0.04);
   void setMC(bool isMC) {isMC_ = isMC;};
   void setCloneTree(TTree* tree, TTree* tree2) {postLepSelTree_ = tree; postLepSelTree2_ = tree2;};
   void setTriggerFlag(std::string triggerFlag) {triggerFlag_ = triggerFlag;};
-  void setBTagPlots(std::vector<TH2D*> vec) {makeBTagEffPlots_ = true; bTagEffPlots_ = vec;};
+  void setBTagPlots(std::vector<TH2D*> vec, bool makePlotsOrRead) {makeBTagEffPlots_ = makePlotsOrRead; bTagEffPlots_ = vec;getBTagWeight_ = !makePlotsOrRead;};
   bool parse_config(std::string);
   void dumpLeptonInfo(AnalysisEvent*);
   void dumpLooseLepInfo(AnalysisEvent*);

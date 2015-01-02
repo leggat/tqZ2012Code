@@ -8,7 +8,7 @@
 #include <iomanip>
 #include <fstream>
 
-Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, bool moreMuonIdCuts, bool dumpEventNumber):
+Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, bool dumpEventNumber):
   // Set all default parameters. These will be editable later on, probably.
   numTightEle_(3),
   tightElePt_(20.),
@@ -54,8 +54,6 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   //Dump event numbers?
   makeEventDump_(dumpEventNumber),
   singleEventInfoDump_(false),
-  //Use the tighter muon ID cuts?
-  tighterMuonID_(moreMuonIdCuts),
   //Set isMC. Default is true, but it's called everytime a new dataset is processed anyway.
   isMC_(true),
   //Same for trigger flag.
@@ -64,7 +62,8 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   postLepSelTree_(0),
   postLepSelTree2_(0),
   //Are we making b-tag efficiency plots?
-  makeBTagEffPlots_(false)
+  makeBTagEffPlots_(false),
+  getBTagWeight_(false)
 {
   //Space here in case other stuff needs to be done.
   //If doing synchronisation., initialise that here.
@@ -77,6 +76,9 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   std::cout << "Initialises fine" << std::endl;
   initialiseJECCors();
   std::cout << "Gets past JEC Cors" << std::endl;
+  
+  //Initialise array of b-tagging errors here.
+  SFb_error = { 0.033408, 0.015446, 0.0146992, 0.0183964, 0.0185363, 0.0145547, 0.0176743, 0.0203609, 0.0143342, 0.0148771, 0.0157936, 0.0176496, 0.0209156, 0.0278529, 0.0346877, 0.0350101 };
 }
 
 Cuts::~Cuts(){
@@ -179,7 +181,7 @@ bool Cuts::makeCuts(AnalysisEvent *event, float *eventWeight, std::map<std::stri
     else postLepSelTree2_->Fill();
   }
 
-  event->jetIndex = makeJetCuts(event, systToRun);
+  event->jetIndex = makeJetCuts(event, systToRun, eventWeight);
   if (doPlots_) plotMap["zMass"]->fillAllPlots(event,*eventWeight);
   if (event->jetIndex.size() < numJets_) return false;
   
@@ -392,9 +394,10 @@ float Cuts::getZCand(AnalysisEvent *event, std::vector<int> electrons, std::vect
   return closestMass;
 }
 
-std::vector<int> Cuts::makeJetCuts(AnalysisEvent *event, int syst){
+std::vector<int> Cuts::makeJetCuts(AnalysisEvent *event, int syst, float * eventWeight){
   
   std::vector<int> jets;
+  float mcTag = 1., mcNoTag = 1., dataTag = 1., dataNoTag = 1., errTag = 0., errNoTag = 0., err1 = 0., err2 = 0., err3 = 0., err4 = 0.;
   //  std::cout << event->eventNum << std::endl << "Jets: " << std::endl;
   for (int i = 0; i < event->numJetPF2PAT; i++){
     //if (std::sqrt(event->jetPF2PATPx[i] * event->jetPF2PATPx[i] + event->jetPF2PATPy[i] * event->jetPF2PATPy[i]) < jetPt_) continue;
@@ -451,6 +454,19 @@ std::vector<int> Cuts::makeJetCuts(AnalysisEvent *event, int syst){
       }
     }
     jets.push_back(i);
+    if (getBTagWeight_){
+      getBWeight(event,jetVec,i,&mcTag,&mcNoTag,&dataTag,&dataNoTag,&errTag,&errNoTag,&err1,&err2,&err3,&err4);
+    }
+  }
+  //Evaluate b-tag weight for event here.
+  if (getBTagWeight_){
+    float bWeight = (dataNoTag * dataTag)/(mcNoTag * mcTag);
+    float bWeightErr = std::sqrt( pow(err1+err2,2) + pow(err3 + err4, 2)) * bWeight;
+    if (syst == 256)
+      bWeight += bWeightErr;
+    if (syst == 512)
+      bWeight -= bWeightErr;
+    *eventWeight *= bWeight;
   }
   return jets;
 }
@@ -549,7 +565,8 @@ bool Cuts::synchCuts(AnalysisEvent* event){
   synchCutFlowHist_->Fill(3.5);
 
   //Add in extra steps here.
-  event->jetIndex = makeJetCuts(event, 0);
+  float tempWeight = 1.;
+  event->jetIndex = makeJetCuts(event, 0, &tempWeight);
   if (singleEventInfoDump_) std::cout << "Number of jets: " << event->jetIndex.size() << std::endl;
   if (event->jetIndex.size() < 1) return false;
   if (makeEventDump_){
@@ -954,7 +971,8 @@ void Cuts::dumpToFile(AnalysisEvent* event, int step){
       break;
     }
   }
-  event->jetIndex = makeJetCuts(event, 0);
+  float tempWeight = 1.;
+  event->jetIndex = makeJetCuts(event, 0, &tempWeight);
   for (unsigned int i = 0; i < 4; i++){
     switch (step) {
     case 2:
@@ -1159,4 +1177,102 @@ TLorentzVector Cuts::getJetLVec(AnalysisEvent* event, int index, int syst){
   //  if (returnJet.Pt() == 0.) std::cout << event->jetPF2PATPtRaw[index]  << " " << event->genJetPF2PATPT[index] << " " << event->jetPF2PATPx[index] << " " << event->jetPF2PATPy[index] << " " << event->jetPF2PATPz[index] << " " << event->jetPF2PATE[index] << " " << oldSmearValue << " " << newSmearValue <<std::endl;
   return returnJet;
 
+}
+
+void Cuts::getBWeight(AnalysisEvent* event, TLorentzVector jet, int index, float * mcTag, float * mcNoTag, float * dataTag, float * dataNoTag, float * errTag, float * errNoTag, float * err1, float * err2, float * err3, float * err4){
+  //Use b-tagging efficiencies and scale factors.
+  //Firstly get efficiency for pt/eta bin here.
+  float eff = 1.;
+  int partonFlavour = std::abs(event->jetPF2PATPID[index]);
+  if (partonFlavour == 0) return;
+  if (partonFlavour == 5){
+    eff = bTagEffPlots_[4]->GetBinContent(bTagEffPlots_[4]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[4]->GetYaxis()->FindBin(std::abs(jet.Eta()))) / bTagEffPlots_[0]->GetBinContent(bTagEffPlots_[0]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[0]->GetYaxis()->FindBin(std::abs(jet.Eta())));
+  }
+  if (partonFlavour == 4){
+    eff = bTagEffPlots_[5]->GetBinContent(bTagEffPlots_[5]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[5]->GetYaxis()->FindBin(std::abs(jet.Eta()))) / bTagEffPlots_[1]->GetBinContent(bTagEffPlots_[1]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[1]->GetYaxis()->FindBin(std::abs(jet.Eta())));
+  }
+  if (partonFlavour < 4){
+    eff = bTagEffPlots_[6]->GetBinContent(bTagEffPlots_[6]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[6]->GetYaxis()->FindBin(std::abs(jet.Eta()))) / bTagEffPlots_[2]->GetBinContent(bTagEffPlots_[2]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[2]->GetYaxis()->FindBin(std::abs(jet.Eta())));
+  }
+  if (partonFlavour == 21){
+    eff = bTagEffPlots_[7]->GetBinContent(bTagEffPlots_[7]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[7]->GetYaxis()->FindBin(std::abs(jet.Eta()))) / bTagEffPlots_[3]->GetBinContent(bTagEffPlots_[3]->GetXaxis()->FindBin(jet.Pt()),bTagEffPlots_[3]->GetYaxis()->FindBin(std::abs(jet.Eta())));
+  }
+
+  //Get SF
+  float SF = 0.;
+  float SFerr = 0.;
+  
+  float x = jet.Pt();
+  //Do some things if it's a b or c
+  if (partonFlavour == 4 || partonFlavour == 5){
+    SF = 1.00572*((1.+(0.013676*x))/(1.+(0.0143279*x)));
+    int ptBin = getptbin_for_btag(jet.Pt());
+    SFerr = SFb_error[ptBin];
+    if (partonFlavour == 4) SFerr*=2;
+  }
+  //Light jets
+  else {
+    float min;
+    float max;
+    if (std::abs(jet.Eta()) < 0.5){
+      SF = ((1.01177+(0.0023066*x))+(-4.56052e-06*(x*x)))+(2.57917e-09*(x*(x*x)));
+      min = ((0.977761+(0.00170704*x))+(-3.2197e-06*(x*x)))+(1.78139e-09*(x*(x*x)));
+      max = ((1.04582+(0.00290226*x))+(-5.89124e-06*(x*x)))+(3.37128e-09*(x*(x*x)));
+    }
+    else if (std::abs(jet.Eta()) < 1.0){
+      SF = ((0.975966+(0.00196354*x))+(-3.83768e-06*(x*x)))+(2.17466e-09*(x*(x*x)));
+      min = ((0.945135+(0.00146006*x))+(-2.70048e-06*(x*x)))+(1.4883e-09*(x*(x*x)));
+      max = ((1.00683+(0.00246404*x))+(-4.96729e-06*(x*x)))+(2.85697e-09*(x*(x*x)));
+    }
+    else if (std::abs(jet.Eta()) < 1.5){
+      SF = ((0.93821+(0.00180935*x))+(-3.86937e-06*(x*x)))+(2.43222e-09*(x*(x*x)));
+      min = ((0.911657+(0.00142008*x))+(-2.87569e-06*(x*x)))+(1.76619e-09*(x*(x*x)));
+      max = ((0.964787+(0.00219574*x))+(-4.85552e-06*(x*x)))+(3.09457e-09*(x*(x*x)));
+    }
+    else{
+      SF = ((1.00022+(0.0010998*x))+(-3.10672e-06*(x*x)))+(2.35006e-09*(x*(x*x)));
+      min = ((0.970045+(0.000862284*x))+(-2.31714e-06*(x*x)))+(1.68866e-09*(x*(x*x)));
+      max = ((1.03039+(0.0013358*x))+(-3.89284e-06*(x*x)))+(3.01155e-09*(x*(x*x)));
+    }
+    SFerr = std::abs(max-SF)>fabs(min-SF)? std::abs(max-SF):std::abs(min-SF);
+  }
+
+
+  //Apply the weight of the jet and set the error
+  if (event->jetPF2PATBDiscriminator[index] > bDiscCut_){
+    *mcTag *= eff;
+    *dataTag *= eff*SF;
+
+    if (partonFlavour == 5 || partonFlavour == 4) *err1 += SFerr/SF;
+    else *err3 += SFerr/SF;
+  }
+  else{
+    *mcNoTag *= (1-eff);
+    *dataNoTag *= (1-eff*SF);
+
+    if (partonFlavour == 5 || partonFlavour == 4) *err2 += (-eff*SFerr)/(1-eff*SF);
+    else *err4 += (-eff*SFerr)/(1-eff*SF);
+    
+  }
+
+}
+
+int Cuts::getptbin_for_btag(float pt){
+  if(pt<30) return 0;
+  else if(pt<40) return 1;
+  else if(pt<50) return 2;
+  else if(pt<60) return 3;
+  else if(pt<70) return 4;
+  else if(pt<80) return 5;
+  else if(pt<100) return 6;
+  else if(pt<120) return 7;
+  else if(pt<160) return 8;
+  else if(pt<210) return 9;
+  else if(pt<260) return 10;
+  else if(pt<320) return 11;
+  else if(pt<400) return 12;
+  else if(pt<500) return 13;
+  else if(pt<600) return 14;
+  else return 15;
+  
 }

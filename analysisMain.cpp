@@ -140,21 +140,21 @@ static void show_usage(std::string name){
             << "\t-l\t\t\t\tIf this option is set, scale MC plots to a fixed lumi. Default is lumi from data samples.\n"
 	    << "\t-o  --outFolder\tOUTFOLDER\tOutput folder for plots. If set overwrites what may be in the config file.\n"
 	    << "\t-s  --postfix\tPOSTFIX\t\tPostfix for produced plots. Over-rides anything set in a configuration file.\n"
-	    << "\t-d\t\t\t\tDump event info. For now this is the yield at each stage. May also include event lists later on. If this flag is set all event weights are 1.\n"
-	    << "\t-x  --cutConf\tCUTCONF\t\tOverrides the cut configuration given in the usual configuration file. This is mostly so that MC can be run on different cuts without having to make wqhole new confs.\n"
-	    << "\t    --plotConf\tPLOTCONF\tOverrides the plot configuration file in the usual configuration file. For various reasons I guess. Also sets -p flag automatically. If you don't want plots, DON'T USE THIS OPTION.\n"
-	    << "\t-i\t\t\t\tInvert the isolation cut of the third lepton. This is for background estimation purposes. Who knows how I am supposed to use that though.\n"
+	    << "\t-d\t\t\t\tDump event info. For now this is the yield at each stage. May also include event lists later on. \n\t\t\t\t\tIf this flag is set all event weights are 1.\n"
+	    << "\t-x  --cutConf\tCUTCONF\t\tOverrides the cut configuration given in the usual configuration file.\n\t\t\t\t\tThis is mostly so that MC can be run on different cuts without having to make wqhole new confs.\n"
+	    << "\t    --plotConf\tPLOTCONF\tOverrides the plot configuration file in the usual configuration file. \n\t\t\t\t\tFor various reasons I guess. Also sets -p flag automatically. If you don't want plots, DON'T USE THIS OPTION.\n"
+	    << "\t-i\t\t\t\tInvert the isolation cut of the third lepton. This is for background estimation purposes. \n\t\t\t\t\tWho knows how I am supposed to use that though.\n"
 	    << "\t-a  --synch\t\t\tMakes cutflows for synch exercise i.e. detailed lepSel cutflows. Doesn't do full event selection.\n"
-	    << "\t-e\tGive a comma separated list of events to run on. This is for synch, but might be useful later?\n"
-	    << "\t-f  --nFiles NFILES\t\t\tUses a specific number of files to run over. This is useful if testing stuff so that it doesn't have to access the T2 a lot etc.\n"
+	    << "\t-e\t\t\t\tGive a comma separated list of events to run on. This is for synch, but might be useful later?\n"
+	    << "\t-f  --nFiles NFILES\t\tUses a specific number of files to run over. \n\t\t\t\t\tThis is useful if testing stuff so that it doesn't have to access the T2 a lot etc.\n"
 	    << "\t-m\t\t\t\tMonte carlo only mode. Will not run over any data in the configuration.\n"
 	    << "\t-b\t\t\t\tData only mode. Only runs over data, skips all MC.\n"
-	    << "\t-t\t\t\t\tDo the tighter muon ID cuts. For synch at the moment, and to see how much of a difference it makes.\n"
+	    << "\t-t\t\t\t\tUse b-tagging efficiencies to reweight MC\n"
 	    << "\t-y\t\t\t\tProduces a file of event dumps for stages of the synch.\n"
 	    << "\t-g\t\t\t\tMakes post-lepSel tree\n"
 	    << "\t-u\t\t\t\tUses post-lepSel trees\n"
-	    << "\t-z  --makeMVATree\t\t\tProduce a tree after event selection for MVA purposes\n"
-	    << "\t-v  --syst  SYST\t\tDo the desired systematic. Brief workaround here, not final yet"
+	    << "\t-z  --makeMVATree\t\tProduce a tree after event selection for MVA purposes\n"
+	    << "\t-v  --syst  SYST\t\tDo the desired systematic. Brief workaround here, not final yet\n"
 	    << "\t-j\t\t\t\tMake b-tagging efficiency histograms. Probably doesn't need to be run too many times.\n"
 	    << "\t-h  --help\t\t\tShow this help message\n"
 	    << std::endl;
@@ -184,7 +184,6 @@ int main(int argc, char* argv[]){
   bool synchCutFlow = false; // For synch
   bool skipData = false; //utility stuff. True if flags are set and will skip either data or mc.
   bool skipMC = false;
-  bool moreMuonIDCuts = false; //Will presumably be true by default at some point.
   std::string* cutConfName = new std::string("");
   std::string* plotConfName = new std::string("");
   int numFiles = -1;
@@ -193,6 +192,7 @@ int main(int argc, char* argv[]){
   bool makePostLepTree = false;
   bool makeMVATree = false;
   bool usePostLepTree = false;
+  bool usebTagWeight = false;
   int systToRun = 0;
   bool makeBTagEffPlots = false;
 
@@ -289,7 +289,7 @@ int main(int argc, char* argv[]){
       dumpEventNumbers = true;
     }
     else if (arg == "-t"){
-      moreMuonIDCuts = true;
+      usebTagWeight = true;
     }
     else if (arg == "-f" || arg == "--nFiles"){
       if (i+1 < argc){
@@ -336,6 +336,14 @@ int main(int argc, char* argv[]){
     std::cerr << "We need a configuration file! Type -h for usage. Error";
     return 0;
   }
+  if (usebTagWeight && !usePostLepTree){
+    std::cerr << "At the moment only getting btag weights from post lep-sel trees is supported. Sorry everyone.";
+    return 0;
+  }
+  if (usebTagWeight && makeBTagEffPlots){
+    std::cerr << "I doubt that set of options is a good idea, so I'm going to just quietly exit here. Don't generate and use b-tag efficiency numbers at the same time...";
+    return 0;
+  }
 
   //Make some vectors that will be filled in the parsing.
   std::vector<Dataset> datasets;
@@ -359,7 +367,7 @@ int main(int argc, char* argv[]){
   systNames.push_back("__pileup__minus");
 
   //Make cuts object. The methods in it should perhaps just be i nthe AnalysisEvent class....
-  Cuts * cutObj = new Cuts(plots,plots||infoDump,invertIsoCut,synchCutFlow,moreMuonIDCuts,dumpEventNumbers);
+  Cuts * cutObj = new Cuts(plots,plots||infoDump,invertIsoCut,synchCutFlow,dumpEventNumbers);
   if (!cutObj->parse_config(*cutConfName)){
     std::cerr << "There was a problem with parsing the config!" << std::endl;
     return 0;
@@ -471,18 +479,35 @@ int main(int argc, char* argv[]){
 
     //Here we will initialise the b-tag eff plots if we are doing b-tag efficiencies
     std::vector<TH2D*> bTagEffPlots;
+    std::vector<std::string> denomNum {"Denom","Num"};
+    std::vector<std::string> typesOfEff {"b","c","uds","g"};
     if (makeBTagEffPlots && dataset->isMC()){
-      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_b","bTagEff_Denom_b",4,0,200,4,0,2.4));
-      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_c","bTagEff_Denom_c",4,0,200,4,0,2.4));
-      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_uds","bTagEff_Denom_uds",4,0,200,4,0,2.4));
-      bTagEffPlots.push_back(new TH2D("bTagEff_Denom_g","bTagEff_Denom_g",4,0,200,4,0,2.4));
-      bTagEffPlots.push_back(new TH2D("bTagEff_Num_b","bTagEff_Num_b",4,0,200,4,0,2.4));
-      bTagEffPlots.push_back(new TH2D("bTagEff_Num_c","bTagEff_Num_c",4,0,200,4,0,2.4));
-      bTagEffPlots.push_back(new TH2D("bTagEff_Num_uds","bTagEff_Num_uds",4,0,200,4,0,2.4));
-      bTagEffPlots.push_back(new TH2D("bTagEff_Num_g","bTagEff_Num_g",4,0,200,4,0,2.4));
-      cutObj->setBTagPlots(bTagEffPlots);
-    }//end btag eff plots
-
+      int ptBins = 4, etaBins = 4;
+      float ptMin = 0., ptMax = 200., etaMin = 0., etaMax = 2.4;
+      for (int unsigned denNum = 0; denNum < denomNum.size(); denNum++){
+	for (int unsigned type = 0; type < typesOfEff.size(); type++){
+	  bTagEffPlots.push_back(new TH2D(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[type]).c_str(),("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[type]).c_str(),ptBins,ptMin,ptMax,etaBins,etaMin,etaMax));
+	}
+      }
+      cutObj->setBTagPlots(bTagEffPlots,true);
+    }//end btag eff plots.
+    if (usePostLepTree && usebTagWeight && dataset->isMC()){
+      //Get efficiency plots from the file. Will have to be from post-lep sel trees I guess.
+      std::string inputPostfix = "";
+      inputPostfix += postfix;
+      inputPostfix += invertIsoCut?"invIso":"";
+      TFile * datasetFileForHists = new TFile(("skims/"+dataset->name() + inputPostfix + "SmallSkim.root").c_str(), "READ");
+      for (int unsigned denNum = 0; denNum < denomNum.size(); denNum++){
+	for (int unsigned eff = 0; eff < typesOfEff.size(); eff++){
+	  bTagEffPlots.push_back((TH2D*)(datasetFileForHists->Get(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[eff]).c_str())->Clone()));
+	}
+      }
+      for (int unsigned plotIt = 0; plotIt < bTagEffPlots.size(); plotIt++){
+	bTagEffPlots[plotIt]->SetDirectory(0);
+      }
+      cutObj->setBTagPlots(bTagEffPlots,false);
+      datasetFileForHists->Close();
+    }
     //extract the dataset weight.
     float datasetWeight = dataset->getDatasetWeight(totalLumi);
 
