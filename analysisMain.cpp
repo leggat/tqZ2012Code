@@ -559,10 +559,10 @@ int main(int argc, char* argv[]){
       }
       std::cout <<std::endl;
     }
-    else{
+    /*    else{
       event->fChain->SetBranchStatus("*",0); //Should disable most branches.
       setBranchStatusAll(event->fChain,dataset->isMC(),dataset->getTriggerFlag());
-    }
+      }*/
 
     int numberOfEvents = datasetChain->GetEntries();
     if (nEvents && nEvents < numberOfEvents) numberOfEvents = nEvents;

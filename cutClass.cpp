@@ -170,11 +170,9 @@ bool Cuts::makeCuts(AnalysisEvent *event, float *eventWeight, std::map<std::stri
   }
   
   if (!isMC_) if (!triggerCuts(event)) return false;
-
   //Make lepton cuts. Does the inverted iso cuts if necessary.
   if (!(invertIsoCut_?invertIsoCut(event,eventWeight, plotMap,cutFlow):makeLeptonCuts(event,eventWeight, plotMap,cutFlow))) return false;
   //  if (!makeLeptonCuts(event,eventWeight,plotMap,cutFlow)) return false;
-
   //This is to make some skims for faster running. Do lepSel and save some files.
   if(postLepSelTree_) {
     if (postLepSelTree_->GetEntriesFast() < 40000) postLepSelTree_->Fill();
@@ -185,7 +183,6 @@ bool Cuts::makeCuts(AnalysisEvent *event, float *eventWeight, std::map<std::stri
   if (doPlots_) plotMap["zMass"]->fillAllPlots(event,*eventWeight);
   if (event->jetIndex.size() < numJets_) return false;
   
-
   if (doPlots_||fillCutFlow_) cutFlow->Fill(2.5,*eventWeight);
 
   event->bTagIndex = makeBCuts(event,event->jetIndex);
@@ -461,6 +458,8 @@ std::vector<int> Cuts::makeJetCuts(AnalysisEvent *event, int syst, float * event
   //Evaluate b-tag weight for event here.
   if (getBTagWeight_){
     float bWeight = (dataNoTag * dataTag)/(mcNoTag * mcTag);
+    if (mcNoTag == 0 || mcTag == 0 || dataNoTag == 0 || dataTag == 0 || mcNoTag != mcNoTag || mcTag != mcTag || dataTag != dataTag || dataNoTag != dataNoTag)
+      bWeight = 1.;
     float bWeightErr = std::sqrt( pow(err1+err2,2) + pow(err3 + err4, 2)) * bWeight;
     if (syst == 256)
       bWeight += bWeightErr;
