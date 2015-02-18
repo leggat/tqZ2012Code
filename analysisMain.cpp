@@ -477,6 +477,7 @@ int main(int argc, char* argv[]){
     cutObj->setTriggerFlag(dataset->getTriggerFlag());
     std::cout << "Trigger flag: " << dataset->getTriggerFlag() << std::endl;
 
+    std::cout << "Initalising b-Tag efficiency plots" << std::endl;
     //Here we will initialise the b-tag eff plots if we are doing b-tag efficiencies
     std::vector<TH2D*> bTagEffPlots;
     std::vector<std::string> denomNum {"Denom","Num"};
@@ -491,6 +492,10 @@ int main(int argc, char* argv[]){
       }
       cutObj->setBTagPlots(bTagEffPlots,true);
     }//end btag eff plots.
+
+    std::cout << "End b-Tag efficiency plots" << std::endl;
+   
+    std::cout << "Get Efficiency Plots from the file" << std::endl;
     if (usePostLepTree && usebTagWeight && dataset->isMC()){
       //Get efficiency plots from the file. Will have to be from post-lep sel trees I guess.
       std::string inputPostfix = "";
@@ -508,16 +513,20 @@ int main(int argc, char* argv[]){
       cutObj->setBTagPlots(bTagEffPlots,false);
       datasetFileForHists->Close();
     }
+
+    std::cout << "Extracting dataset weight" << std::endl;
     //extract the dataset weight.
     float datasetWeight = dataset->getDatasetWeight(totalLumi);
-
+    std::cout << "Extracted dataset weight" << std::endl;
 
     //Apply trigger SF here. Also does systematic for trigger +-
     if (infoDump) datasetWeight = 1;
-    std::cout << datasetChain->GetEntries() << " number of items in tree. Dataset weight: " << datasetWeight << std::endl;
+    std::cout << "Creating \"AnalysisEvent\" event class" << std::endl;
     AnalysisEvent * event = new AnalysisEvent(dataset->isMC(),dataset->getTriggerFlag(),datasetChain);
+    std::cout << "Created \"AnalysisEvent\" event class" << std::endl;
 
     //Adding in some stuff here to make a skim file out of post lep sel stuff
+    std::cout << "Adding in some stuff to make a skim file out of the post lepton selection stuff ... " << std::endl;
     TTree * cloneTree = 0;
     TTree * cloneTree2 = 0;
     if (makePostLepTree){
@@ -525,7 +534,10 @@ int main(int argc, char* argv[]){
       cloneTree2 = datasetChain->CloneTree(0);
       cutObj->setCloneTree(cloneTree,cloneTree2);
     }
+    std::cout << "Finished setup for skim file made out of post lepton selection stuff ... " << std::endl;
+    
     //If we're making the MVA tree, set it up here. 
+    std::cout << "Setting up the MVA tree" << std::endl;
     std::vector<TTree *> mvaTree;
     //Add a few variables into the MVA tree for easy access of stuff like lepton index etc
     float eventWeight = 0;
@@ -535,7 +547,8 @@ int main(int argc, char* argv[]){
     int jetInd[15];  // The index of the selected jets;
     int bJetInd[10]; // Index of selected b-jets;
     //Now add in the branches:
-    
+    std::cout << "Now adding in the branches ... " << std::endl;
+
     if (makeMVATree){
       int systMask = 1;
       std::cout << "Making systematic trees for " << dataset->name() << ": ";
@@ -564,7 +577,10 @@ int main(int argc, char* argv[]){
       setBranchStatusAll(event->fChain,dataset->isMC(),dataset->getTriggerFlag());
       }*/
 
+    std::cout << "Getting number of events ... " << std::endl;
     int numberOfEvents = datasetChain->GetEntries();
+    std::cout << "numberOfEvents = " << numberOfEvents << std::endl;
+    std::cout << "datasetWeight = " << datasetWeight << std::endl;
     if (nEvents && nEvents < numberOfEvents) numberOfEvents = nEvents;
     //    datasetChain->Draw("numElePF2PAT","numMuonPF2PAT > 2");
     //    TH1F * htemp = (TH1F*)gPad->GetPrimitive("htemp");
@@ -664,7 +680,7 @@ int main(int argc, char* argv[]){
       TFile outFile(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim.root").c_str(),"RECREATE");
       outFile.cd();
       std::cout << "\nPrinting some info on the tree " <<dataset->name() << " " << cloneTree->GetEntries() << std::endl;
-      std::cout << "But there were :" <<  datasetChain->GetEntries() << " entries in the original tree" << std::endl;
+      std::cout << "But there were : " <<  datasetChain->GetEntries() << " entries in the original tree" << std::endl;
       cloneTree->Write();
       //If we're doing b-tag efficiencies, let's save them here.
       if (makeBTagEffPlots){
