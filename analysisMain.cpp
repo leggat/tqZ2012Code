@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <map>
 #include <math.h>
+#include <LHAPDF/LHAPDF.h>
 
 //This method is here to set up a load of branches in the TTrees that I will be analysing. Because it's vastly quicker to not load the whole damned thing.
 void setBranchStatusAll(TTree * chain, bool isMC, std::string triggerFlag){
@@ -156,6 +157,9 @@ static void show_usage(std::string name){
 	    << "\t-z  --makeMVATree\t\tProduce a tree after event selection for MVA purposes\n"
 	    << "\t-v  --syst  SYST\t\tDo the desired systematic. Brief workaround here, not final yet\n"
 	    << "\t-j\t\t\t\tMake b-tagging efficiency histograms. Probably doesn't need to be run too many times.\n"
+	    << "\t-k          CHANS\t\tBit mask dealy for the channels. 1 - eee 2 - eemu 4 - emumu 8 - mumumu 16 through 128 are same but for inverted third lep iso.\n"
+	    << "\t    --skipTrig\t\t\tSkip running triggers. Used for trigger studies or something.\n"
+	    << "zt    --mvaDir DIR\t\tChange the name of the folder the mva outputs go to. mvaTest/ by default. Include the /\n."
 	    << "\t-h  --help\t\t\tShow this help message\n"
 	    << std::endl;
 }
@@ -195,6 +199,9 @@ int main(int argc, char* argv[]){
   bool usebTagWeight = false;
   int systToRun = 0;
   bool makeBTagEffPlots = false;
+  int channelsToRun = 0; //0 makes it run the one in the config, I guess.
+  bool skipTrig = false;
+  std::string mvaDir = "mvaTest/";
 
   // variables for plotting. 
   std::vector<std::string> plotNames;
@@ -328,9 +335,22 @@ int main(int argc, char* argv[]){
     else if (arg == "-j"){
       makeBTagEffPlots = true;
     }
-    
-    
-    
+    else if (arg == "-k"){
+      if (i+1 < argc){
+	channelsToRun = atoi(argv[++i]);
+      }
+      else{
+	std::cerr << "-k needs a config file!";
+	return 0;
+      }
+    }
+    else if (arg == "--skipTrig"){
+      skipTrig = true;
+      std::cout << "Note that you're skipping the trigger!" << std::endl;
+    }
+    else if (arg == "--mvaDir"){
+      mvaDir = argv[++i];
+    }
   } // End command line arguments loop.
   if (config == ""){
     std::cerr << "We need a configuration file! Type -h for usage. Error";
@@ -365,6 +385,10 @@ int main(int argc, char* argv[]){
   systNames.push_back("__jes__minus");
   systNames.push_back("__pileup__plus");
   systNames.push_back("__pileup__minus");
+  systNames.push_back("__bTag__plus");
+  systNames.push_back("__bTag__minus");
+  systNames.push_back("__pdf__plus");
+  systNames.push_back("__pdf__minus");
 
   //Make cuts object. The methods in it should perhaps just be i nthe AnalysisEvent class....
   Cuts * cutObj = new Cuts(plots,plots||infoDump,invertIsoCut,synchCutFlow,dumpEventNumbers);
@@ -372,7 +396,35 @@ int main(int argc, char* argv[]){
     std::cerr << "There was a problem with parsing the config!" << std::endl;
     return 0;
   };
+  //For studying some trigger things. Default is false.
+  cutObj->setSkipTrig(skipTrig);
   
+  if (channelsToRun){
+    std::cout << "Running over the channels: " << std::endl;
+    for (unsigned int channelInd = 1; channelInd != 256; channelInd = channelInd << 1){
+      if (!(channelInd & channelsToRun) && channelsToRun) continue;
+      if (channelInd & 17){
+	std::cout << "eee ";
+      }
+      if (channelInd & 34){ //eemu channels
+	std::cout << "eemu ";
+      }
+      if (channelInd & 68){ // emumu channels
+	std::cout << "emumu ";
+      }
+      if (channelInd & 136){ // mumumu channels
+	std::cout << "mumumu ";
+      }
+      if (channelInd & 15){ //nominal samples
+	std::cout << "nominal" << std::endl;
+      }
+      if (channelInd & 240){ //inv iso samples
+	std::cout << "inverted" << std::endl;
+      }
+    }
+  }
+
+
   //Make pileupReweighting stuff here
   TFile * dataPileupFile = new TFile("pileup/truePileupTest.root","READ");
   TH1F* dataPU = (TH1F*)(dataPileupFile->Get("pileup")->Clone());
@@ -406,6 +458,12 @@ int main(int argc, char* argv[]){
   systUpFile->Close();
   systDownFile->Close();
 
+  //Initialise PDFs
+  if (systToRun & 1024 || systToRun & 2048){
+    LHAPDF::initPDFSet(1, "CT10nnlo.LHgrid");
+  }
+  //    LHAPDF::initPDFSet(1, "CT10nnlo.LHgrid");
+
   //Do a little initialisation for the plots here. Will later on be done in a config file.
   
   //Initialise plot stage names.
@@ -421,38 +479,79 @@ int main(int argc, char* argv[]){
   std::vector<std::string> plotOrder;
   std::map<std::string, datasetInfo> datasetInfos;
 
+  bool datasetFilled = false;
+
   if (totalLumi == 0.) totalLumi = usePreLumi;
   for (std::vector<Dataset>::iterator dataset = datasets.begin(); dataset!=datasets.end(); ++dataset){
-    if (dataset->isMC() && skipMC) continue;
-    if (!dataset->isMC() && skipData) continue;
-    if (plots||infoDump) { // Initialise a load of stuff that's required by the plotting macro.
-      int systMask = 1;
-      for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
-	if (systInd > 0 && !(systToRun & systMask)){
-	  systMask = systMask << 1;
-	  continue;
+    datasetFilled = false;
+    TChain * datasetChain = new TChain(dataset->treeName().c_str());
+    for (unsigned int channelInd = 1; channelInd != 256; channelInd = channelInd << 1){
+      if (!(channelInd & channelsToRun) && channelsToRun) continue;
+      if (channelsToRun){
+	if (channelInd & 17){ // eee channels
+	  cutObj->setNumLeps(0,0,3,3);
+	  cutObj->setCutConfTrigLabel("e");
+	  channel = "eee";
+	  postfix = "eee";
 	}
-	if (cutFlowMap.find(dataset->getFillHisto()+systNames[systInd]) == cutFlowMap.end()){
-	  legOrder.push_back(dataset->getFillHisto());
-	  plotOrder.push_back(dataset->getFillHisto());
-	  cutFlowMap[dataset->getFillHisto()] = new TH1F((dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),(dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),4,0,4); //Hopefully make this configurable later on. Same deal as the rest of the plots I guess, work out libconfig.
-	  if (systInd == 0){
-	    datasetInfos[dataset->getFillHisto()] = datasetInfo();
-	    datasetInfos[dataset->getFillHisto()].colour = dataset->getColour();
-	    datasetInfos[dataset->getFillHisto()].legLabel = dataset->getPlotLabel();
-	    datasetInfos[dataset->getFillHisto()].legType = dataset->getPlotType();
-	  }
-	  if (plots){ // Only make all the plots if it's entirely necessary.
-	    plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()] = std::map<std::string,Plots*>();
-	  
-	    for (unsigned int j = 0; j < stageNames.size(); j++){
-	      plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()][stageNames[j]] = new Plots(plotNames, xMin, xMax,nBins, fillExp, xAxisLabels, cutStage, j, dataset->getFillHisto()+"_"+stageNames[j]+systNames[systInd]);
+	if (channelInd & 34){ //eemu channels
+	  cutObj->setNumLeps(1,1,2,2);
+	  cutObj->setCutConfTrigLabel("d");
+	  channel = "eemu";
+	  postfix = "eemu";
+	}
+	if (channelInd & 68){ // emumu channels
+	  cutObj->setNumLeps(2,2,1,1);
+	  cutObj->setCutConfTrigLabel("d");
+	  channel = "emumu";
+	  postfix = "emumu";
+	}
+	if (channelInd & 136){ // mumumu channels
+	  cutObj->setNumLeps(3,3,0,0);
+	  cutObj->setCutConfTrigLabel("m");
+	  channel = "mumumu";
+	  postfix = "mumumu";
+	}
+	if (channelInd & 15){ //nominal samples
+	  cutObj->setInvIsoCut(false);
+	  invertIsoCut = false;
+	}
+	if (channelInd & 240){ //inv iso samples
+	  cutObj->setInvIsoCut(true);
+	  invertIsoCut = true;
+	}
+     } 
+      if (dataset->isMC() && skipMC) continue;
+      if (!dataset->isMC() && skipData) continue;
+      if (plots||infoDump) { // Initialise a load of stuff that's required by the plotting macro.
+	int systMask = 1;
+	for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
+	  if (systInd > 0 && !(systToRun & systMask)){
+	    systMask = systMask << 1;
+	    continue;
+	  } 
+	  if (cutFlowMap.find(dataset->getFillHisto()+systNames[systInd]) == cutFlowMap.end()){
+	    legOrder.push_back(dataset->getFillHisto());
+	    plotOrder.push_back(dataset->getFillHisto());
+	    cutFlowMap[dataset->getFillHisto()] = new TH1F((dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),(dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),4,0,4); //Hopefully make this configurable later on. Same deal as the rest of the plots I guess, work out libconfig.
+	    if (systInd == 0){
+	      datasetInfos[dataset->getFillHisto()] = datasetInfo();
+	      datasetInfos[dataset->getFillHisto()].colour = dataset->getColour();
+	      datasetInfos[dataset->getFillHisto()].legLabel = dataset->getPlotLabel();
+	      datasetInfos[dataset->getFillHisto()].legType = dataset->getPlotType();
 	    }
-	  }
-	}//end cutFlow find loop
-	if (systInd > 0) systMask = systMask << 1;
-      }//end systematic loop
+	    if (plots){ // Only make all the plots if it's entirely necessary.
+	      plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()] = std::map<std::string,Plots*>();
+	  
+	      for (unsigned int j = 0; j < stageNames.size(); j++){
+		plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()][stageNames[j]] = new Plots(plotNames, xMin, xMax,nBins, fillExp, xAxisLabels, cutStage, j, dataset->getFillHisto()+"_"+stageNames[j]+systNames[systInd]);
+	      }
+	    }
+	  }//end cutFlow find loop
+	  if (systInd > 0) systMask = systMask << 1;
+	}//end systematic loop
       
+<<<<<<< HEAD
     } //end plots if
     //If making either plots or doing the event dump, make cut flow object.
     std::cerr << "Processing dataset " << dataset->name() << std::endl;
@@ -505,11 +604,87 @@ int main(int argc, char* argv[]){
       for (int unsigned denNum = 0; denNum < denomNum.size(); denNum++){
 	for (int unsigned eff = 0; eff < typesOfEff.size(); eff++){
 	  bTagEffPlots.push_back((TH2D*)(datasetFileForHists->Get(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[eff]).c_str())->Clone()));
+=======
+      } //end plots if
+      //If making either plots or doing the event dump, make cut flow object.
+      std::cerr << "Processing dataset " << dataset->name() << std::endl;
+      if (!usePostLepTree){
+	if (!datasetFilled){
+	  if (!dataset->fillChain(datasetChain,numFiles)){
+	    std::cerr << "There was a problem constructing the chain for " << dataset->name() << ". Continuing with next dataset.\n";
+	    continue;
+	  }
+	  datasetFilled = true;
 	}
       }
-      for (int unsigned plotIt = 0; plotIt < bTagEffPlots.size(); plotIt++){
-	bTagEffPlots[plotIt]->SetDirectory(0);
+      else{
+	std::string inputPostfix = "";
+	inputPostfix += postfix;
+	inputPostfix += invertIsoCut?"invIso":"";
+	std::cout << "skims/"+dataset->name()+inputPostfix + "SmallSkim.root" << std::endl;
+	datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim.root").c_str());
+	std::ifstream secondTree(("skims/"+dataset->name()+inputPostfix + "SmallSkim1.root").c_str());
+	if (secondTree.good()) datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim1.root").c_str());
+	std::ifstream thirdTree(("skims/"+dataset->name()+inputPostfix + "SmallSkim2.root").c_str());
+	if (thirdTree.good()) datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim2.root").c_str());
       }
+      cutObj->setMC(dataset->isMC());
+      cutObj->setEventInfoFlag(readEventList);
+      cutObj->setTriggerFlag(dataset->getTriggerFlag());
+      std::cout << "Trigger flag: " << dataset->getTriggerFlag() << std::endl;
+
+      //Here we will initialise the b-tag eff plots if we are doing b-tag efficiencies
+      std::vector<TH2D*> bTagEffPlots;
+      std::vector<std::string> denomNum {"Denom","Num"};
+      std::vector<std::string> typesOfEff {"b","c","uds","g"};
+      if (makeBTagEffPlots && dataset->isMC()){
+	int ptBins = 4, etaBins = 4;
+	float ptMin = 0., ptMax = 200., etaMin = 0., etaMax = 2.4;
+	for (int unsigned denNum = 0; denNum < denomNum.size(); denNum++){
+	  for (int unsigned type = 0; type < typesOfEff.size(); type++){
+	    bTagEffPlots.push_back(new TH2D(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[type]).c_str(),("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[type]).c_str(),ptBins,ptMin,ptMax,etaBins,etaMin,etaMax));
+	  }
+	}
+	cutObj->setBTagPlots(bTagEffPlots,true);
+      }//end btag eff plots.
+      if (usePostLepTree && usebTagWeight && dataset->isMC()){
+	//Get efficiency plots from the file. Will have to be from post-lep sel trees I guess.
+	std::string inputPostfix = "";
+	inputPostfix += postfix;
+	inputPostfix += invertIsoCut?"invIso":"";
+	TFile * datasetFileForHists = new TFile(("skims/"+dataset->name() + inputPostfix + "SmallSkim.root").c_str(), "READ");
+	for (int unsigned denNum = 0; denNum < denomNum.size(); denNum++){
+	  for (int unsigned eff = 0; eff < typesOfEff.size(); eff++){
+	    bTagEffPlots.push_back((TH2D*)(datasetFileForHists->Get(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[eff]).c_str())->Clone()));
+	  }
+>>>>>>> otherfork/master
+	}
+	for (int unsigned plotIt = 0; plotIt < bTagEffPlots.size(); plotIt++){
+	  bTagEffPlots[plotIt]->SetDirectory(0);
+	}
+	cutObj->setBTagPlots(bTagEffPlots,false);
+	datasetFileForHists->Close();
+      }
+      //extract the dataset weight.
+      float datasetWeight = dataset->getDatasetWeight(totalLumi);
+
+
+      //Apply trigger SF here. Also does systematic for trigger +-
+      if (infoDump) datasetWeight = 1;
+      std::cout << datasetChain->GetEntries() << " number of items in tree. Dataset weight: " << datasetWeight << std::endl;
+      AnalysisEvent * event = new AnalysisEvent(dataset->isMC(),dataset->getTriggerFlag(),datasetChain);
+
+      //Adding in some stuff here to make a skim file out of post lep sel stuff
+      TTree * cloneTree = 0;
+      TTree * cloneTree2 = 0;
+      TTree * cloneTree3 = 0;
+      if (makePostLepTree){
+	cloneTree = datasetChain->CloneTree(0);
+	cloneTree2 = datasetChain->CloneTree(0);
+	cloneTree3 = datasetChain->CloneTree(0);
+	cutObj->setCloneTree(cloneTree,cloneTree2,cloneTree3);
+      }
+<<<<<<< HEAD
       cutObj->setBTagPlots(bTagEffPlots,false);
       datasetFileForHists->Close();
     }
@@ -597,79 +772,170 @@ int main(int argc, char* argv[]){
 	if (systInd > 0 && !(systMask & systToRun)) {
 	  if (systInd > 0) systMask = systMask << 1;
 	  continue;
-	}
-	eventWeight = event->getEventWeight(i);
-	//apply trigger weights here.
-	if (dataset->isMC()){
-	  float pileupWeight = puReweight->GetBinContent(puReweight->GetXaxis()->FindBin(event->numVert));
-	  if (systMask == 64) pileupWeight = puSystUp->GetBinContent(puSystUp->GetXaxis()->FindBin(event->numVert));
-	  if (systMask == 128) pileupWeight = puSystDown->GetBinContent(puSystDown->GetXaxis()->FindBin(event->numVert));
-	  eventWeight *= pileupWeight;
-	  if (channel == "eee"){
-	    float twgt = 0.9975;
-	    if (systInd > 0 && (systMask == 1)) twgt += 0.0455;
-	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0354;
-	    eventWeight *= twgt;
-	  }
-	  else if (channel == "eemu"){
-	    float twgt = 0.9451;
-	    if (systInd > 0 && (systMask == 1)) twgt += 0.0394;
-	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0408;
-	    eventWeight *= twgt;
-	  }
-	  if (channel == "emumu"){
-	    float twgt = 0.9001;
-	    if (systInd > 0 && (systMask == 1)) twgt += 0.0565;
-	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0422;
-	    eventWeight *= twgt;
-	  }
-	  if (channel == "mumumu"){
-	    float twgt = 0.9871;
-	    if (systInd > 0 && (systMask == 1)) twgt += 0.0242;
-	    if (systInd > 0 && (systMask == 2)) twgt -= 0.0212;
-	    eventWeight *= twgt;
-	  }
-	}
+=======
+      //If we're making the MVA tree, set it up here. 
+      std::vector<TTree *> mvaTree;
+      //Add a few variables into the MVA tree for easy access of stuff like lepton index etc
+      float eventWeight = 0;
+      int zLep1Index = -1; // Addresses in elePF2PATWhatever of the z lepton
+      int zLep2Index = -1;
+      int wLepIndex = -1;
+      int jetInd[15];  // The index of the selected jets;
+      int bJetInd[10]; // Index of selected b-jets;
+      //Now add in the branches:
+    
+      if (makeMVATree){
+	int systMask = 1;
+	std::cout << "Making systematic trees for " << dataset->name() << ": ";
+	for (unsigned int systIn = 0; systIn < systNames.size(); systIn++){
+	  std::cout << systNames[systIn] << " ";
+	  //	std::cout << "Making systs: " << systMask << " " << systToRun << " " << systIn << " " << (systMask & systToRun) << std::endl;
+	  /*	if (systIn > 0 && !(systMask & systToRun)){
+		if (systIn > 0) systMask = systMask << 1;
+		continue;
+		}*/
+	  mvaTree.push_back(datasetChain->CloneTree(0));
+	  mvaTree[systIn]->SetName((mvaTree[systIn]->GetName()+systNames[systIn]).c_str());
+	  mvaTree[systIn]->Branch("eventWeight", &eventWeight, "eventWeight/F");
+	  mvaTree[systIn]->Branch("zLep1Index",&zLep1Index,"zLep1Index/I");
+	  mvaTree[systIn]->Branch("zLep2Index",&zLep2Index,"zLep2Index/I");
+	  mvaTree[systIn]->Branch("wLepIndex",&wLepIndex,"wLepIndex/I");
+	  mvaTree[systIn]->Branch("jetInd",jetInd,"jetInd[15]/I");
+	  mvaTree[systIn]->Branch("bJetInd",bJetInd,"jetInd[10]/I");
 
-	if (infoDump) eventWeight = 1;
-	if (readEventList) {
-	  bool tempBool = false;
-	  for (unsigned int i = 0; i < eventNumbers.size(); i++){
-	    if (eventNumbers[i] == event->eventNum) {
-	      tempBool = true;
-	      break;
+	  if (systIn > 0) systMask = systMask << 1;
+>>>>>>> otherfork/master
+	}
+	std::cout <<std::endl;
+      }
+      /*    else{
+	    event->fChain->SetBranchStatus("*",0); //Should disable most branches.
+	    setBranchStatusAll(event->fChain,dataset->isMC(),dataset->getTriggerFlag());
+	    }*/
+
+      int numberOfEvents = datasetChain->GetEntries();
+      if (nEvents && nEvents < numberOfEvents) numberOfEvents = nEvents;
+      //    datasetChain->Draw("numElePF2PAT","numMuonPF2PAT > 2");
+      //    TH1F * htemp = (TH1F*)gPad->GetPrimitive("htemp");
+      //    htemp->SaveAs("tempCanvas.png");
+      int foundEvents = 0;
+      for (int i = 0; i < numberOfEvents; i++){
+	if (i % 500 < 0.01) std::cerr << i << " (" << 100*float(i)/numberOfEvents << "%) with " << event->numElePF2PAT << " electrons. Found " << (synchCutFlow?cutObj->numFound():foundEvents) << " events.\r";
+	event->GetEntry(i);
+	//Do the systematics indicated by the systematic flag, oooor just do data if that's your thing. Whatevs.
+	int systMask = 1;
+	for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
+	  if (!dataset->isMC() && systInd > 0) break;
+	  //	std::cout << systInd << " " << systMask << std::endl;
+	  if (systInd > 0 && !(systMask & systToRun)) {
+	    if (systInd > 0) systMask = systMask << 1;
+	    continue;
+	  }
+	  eventWeight = event->getEventWeight(i);
+	  //apply trigger weights here.
+	  if (dataset->isMC()){
+	    float pileupWeight = puReweight->GetBinContent(puReweight->GetXaxis()->FindBin(event->numVert));
+	    if (systMask == 64) pileupWeight = puSystUp->GetBinContent(puSystUp->GetXaxis()->FindBin(event->numVert));
+	    if (systMask == 128) pileupWeight = puSystDown->GetBinContent(puSystDown->GetXaxis()->FindBin(event->numVert));
+	    eventWeight *= pileupWeight;
+	    if (channel == "eee"){
+	      float twgt = 0.9975;
+	      if (systInd > 0 && (systMask == 1)) twgt += 0.0455;
+	      if (systInd > 0 && (systMask == 2)) twgt -= 0.0354;
+	      eventWeight *= twgt;
+	    }
+	    else if (channel == "eemu"){
+	      float twgt = 0.9451;
+	      if (systInd > 0 && (systMask == 1)) twgt += 0.0394;
+	      if (systInd > 0 && (systMask == 2)) twgt -= 0.0408;
+	      eventWeight *= twgt;
+	    }
+	    if (channel == "emumu"){
+	      float twgt = 0.9001;
+	      if (systInd > 0 && (systMask == 1)) twgt += 0.0565;
+	      if (systInd > 0 && (systMask == 2)) twgt -= 0.0422;
+	      eventWeight *= twgt;
+	    }
+	    if (channel == "mumumu"){
+	      float twgt = 0.9871;
+	      if (systInd > 0 && (systMask == 1)) twgt += 0.0242;
+	      if (systInd > 0 && (systMask == 2)) twgt -= 0.0212;
+	      eventWeight *= twgt;
 	    }
 	  }
-	  if (!tempBool) continue;
-	  std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << datasetChain->GetFile()->GetName() << std::endl;
-	  cutObj->dumpLooseLepInfo(event);
-	  cutObj->dumpLeptonInfo(event);
-	
-	}
-	eventWeight*=datasetWeight;
-	if (!cutObj->makeCuts(event,&eventWeight,plotsMap[dataset->getFillHisto()+systNames[systInd]],cutFlowMap[dataset->getFillHisto()+systNames[systInd]],systInd?systMask:systInd)) {
-	  if (systInd) systMask = systMask << 1;
-	  continue;
-	}
-	//      if (synchCutFlow){
-	//	std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << std::endl;
-	//}
-	if (makeMVATree){
-	  zLep1Index = event->zPairIndex.first;
-	  zLep2Index = event->zPairIndex.second;
-	  wLepIndex = event->wLepIndex;
-	  for (unsigned int jetIndexIt = 0; jetIndexIt < 15; jetIndexIt++){
-	    if (jetIndexIt < event->jetIndex.size()) jetInd[jetIndexIt] = event->jetIndex[jetIndexIt];
-	    else jetInd[jetIndexIt] = -1;
-	  }
-	  for (unsigned int bJetIt = 0; bJetIt < 10; bJetIt++){
-	    if (bJetIt < event->bTagIndex.size()) bJetInd[bJetIt] = event->bTagIndex[bJetIt];
-	    else bJetInd[bJetIt] = -1;
-	  }
-	  mvaTree[systInd]->Fill();
-	  
-	}
 
+	  if (infoDump) eventWeight = 1;
+	  if (readEventList) {
+	    bool tempBool = false;
+	    for (unsigned int i = 0; i < eventNumbers.size(); i++){
+	      if (eventNumbers[i] == event->eventNum) {
+		tempBool = true;
+		break;
+	      }
+	    }
+	    if (!tempBool) continue;
+	    std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << datasetChain->GetFile()->GetName() << std::endl;
+	    cutObj->dumpLooseLepInfo(event);
+	    cutObj->dumpLeptonInfo(event);
+	
+	  }
+	  eventWeight*=datasetWeight;
+	  if (!cutObj->makeCuts(event,&eventWeight,plotsMap[dataset->getFillHisto()+systNames[systInd]],cutFlowMap[dataset->getFillHisto()+systNames[systInd]],systInd?systMask:systInd)) {
+	    if (systInd) systMask = systMask << 1;
+	    continue;
+	  }
+	  //Do PDF reweighting things here
+	  if (systMask == 1024 || systMask == 2048){
+	    LHAPDF::usePDFMember(1,0);
+	    float q = event->genPDFScale;
+	    float x1 = event->genPDFx1;
+	    float x2 = event->genPDFx2;
+	    int id1 = event->genPDFf1;
+	    int id2 = event->genPDFf2;
+	    double xpdf1 = LHAPDF::xfx(1, x1, q, id1);
+	    double xpdf2 = LHAPDF::xfx(1, x2, q, id2);
+	    std::vector<float> pdf_weights;
+	    //	  std::cout << q << " " << x1 << " " << id1 << " " << id2 << " ";
+	    //	  std::cout << xpdf1 << " " << xpdf2 << " " << xpdf1 * xpdf2 << " ";
+	    float min = 1.0;
+	    float max = 1.0;
+	    float pdfWeightUp = 0.0;
+	    float pdfWeightDown = 0.0;
+	    for (int i = 1; i <=50; ++i){
+	      LHAPDF::usePDFMember(1,i);
+	      double xpdf1_new = LHAPDF::xfx(1, x1, q, id1);
+	      double xpdf2_new = LHAPDF::xfx(1, x2, q, id2);
+	      double weight = xpdf1_new * xpdf2_new / (xpdf1 * xpdf2);
+	      pdf_weights.push_back(weight);
+	      if (weight > 1.0) pdfWeightUp += (1-weight) * (1-weight);
+	      if (weight < 1.0) pdfWeightDown += (1-weight) * (1-weight);
+	      if (weight > max) max = weight;
+	      if (weight < min) min = weight;
+	    }
+	    if (systMask == 1024) eventWeight *= max;
+	    if (systMask == 2048) eventWeight *= min;
+	    //	  std::cout << eventWeight << std::setprecision(4) << max << " " << min << " " << 1+std::sqrt(pdfWeightUp) << " " << 1-std::sqrt(pdfWeightDown) << std::endl;
+	  }
+	  //      if (synchCutFlow){
+	  //	std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << std::endl;
+	  //}
+	  if (makeMVATree){
+	    zLep1Index = event->zPairIndex.first;
+	    zLep2Index = event->zPairIndex.second;
+	    wLepIndex = event->wLepIndex;
+	    for (unsigned int jetIndexIt = 0; jetIndexIt < 15; jetIndexIt++){
+	      if (jetIndexIt < event->jetIndex.size()) jetInd[jetIndexIt] = event->jetIndex[jetIndexIt];
+	      else jetInd[jetIndexIt] = -1;
+	    }
+	    for (unsigned int bJetIt = 0; bJetIt < 10; bJetIt++){
+	      if (bJetIt < event->bTagIndex.size()) bJetInd[bJetIt] = event->bTagIndex[bJetIt];
+	      else bJetInd[bJetIt] = -1;
+	    }
+	    mvaTree[systInd]->Fill();
+	  
+	  }
+
+<<<<<<< HEAD
 	foundEvents++;
 	if (systInd > 0) systMask = systMask << 1;
       }// End systematics loop.
@@ -686,69 +952,99 @@ int main(int argc, char* argv[]){
       if (makeBTagEffPlots){
 	for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
 	  bTagEffPlots[i]->Write();
-	}
-      }
-      outFile.Write();
-      outFile.Close();
-      delete cloneTree;
+=======
+	  foundEvents++;
+	  if (systInd > 0) systMask = systMask << 1;
+	}// End systematics loop.
+      } //end event loop
 
-      //If we have any events in the second tree:
-      if (cloneTree2->GetEntriesFast() > 0){
-	TFile outFile1(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim1.root").c_str(),"RECREATE");
-	outFile1.cd();
-	cloneTree2->Write();
-	outFile1.Write();
-	outFile1.Close();
+      //If we're making post lepSel skims save the tree here
+      if (makePostLepTree){
+	TFile outFile(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim.root").c_str(),"RECREATE");
+	outFile.cd();
+	std::cout << "\nPrinting some info on the tree " <<dataset->name() << " " << cloneTree->GetEntries() << std::endl;
+	std::cout << "But there were :" <<  datasetChain->GetEntries() << " entries in the original tree" << std::endl;
+	cloneTree->Write();
+	//If we're doing b-tag efficiencies, let's save them here.
+	if (makeBTagEffPlots){
+	  for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
+	    bTagEffPlots[i]->Write();
+	  }
+>>>>>>> otherfork/master
+	}
+	outFile.Write();
+	outFile.Close();
+	delete cloneTree;
+
+	//If we have any events in the second tree:
+	if (cloneTree2->GetEntries() > 0){
+	  std::cout << "There are " << cloneTree2->GetEntries() << " entries in the second tree!" << std::endl;
+	  TFile outFile1(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim1.root").c_str(),"RECREATE");
+	  outFile1.cd();
+	  cloneTree2->Write();
+	  outFile1.Write();
+	  outFile1.Close();
+	}
+	if (cloneTree3->GetEntries() > 0){
+	  std::cout << "There are " << cloneTree3->GetEntries() << " entries in the third tree! What a lot of trees we've made." << std::endl;
+	  TFile outFile1(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim2.root").c_str(),"RECREATE");
+	  outFile1.cd();
+	  cloneTree3->Write();
+	  outFile1.Write();
+	  outFile1.Close();
+	}
+	delete cloneTree2;
+	delete cloneTree3;
       }
-      delete cloneTree2;
-    }
 
 
     
-    //Save mva outputs
-    if (makeMVATree){
-      TFile mvaOutFile(("mvaTest/" + dataset->name() + postfix + (invertIsoCut?"invIso":"")  +  "mvaOut.root").c_str(),"RECREATE");
-      mvaOutFile.cd();
-      std::cout << std::endl;
-      int systMask = 1;
-      std::cout << "Saving Systematics: ";
-      for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
-	if (systInd > 0 && !(systToRun & systMask)){
-	  systMask = systMask << 1;
-	  continue;
+      //Save mva outputs
+      if (makeMVATree){
+	std::cout << (mvaDir + dataset->name() + postfix + (invertIsoCut?"invIso":"")  +  "mvaOut.root") << std::endl;
+	TFile mvaOutFile((mvaDir + dataset->name() + postfix + (invertIsoCut?"invIso":"")  +  "mvaOut.root").c_str(),"RECREATE");
+	mvaOutFile.cd();
+	std::cout << std::endl;
+	int systMask = 1;
+	std::cout << "Saving Systematics: ";
+	for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
+	  if (systInd > 0 && !(systToRun & systMask)){
+	    systMask = systMask << 1;
+	    continue;
+	  }
+	  std::cout << systNames[systInd] << ": " << mvaTree[systInd]->GetEntriesFast() << " " << std::flush;
+	  mvaTree[systInd]->Write();
+	  if (systInd > 0) systMask = systMask << 1;
+	  if (!dataset->isMC()) break;
 	}
-	std::cout << systNames[systInd] << ": " << mvaTree[systInd]->GetEntriesFast() << " " << std::flush;
-	mvaTree[systInd]->Write();
-	if (systInd > 0) systMask = systMask << 1;
-	if (!dataset->isMC()) break;
+	std::cout << std::endl;
+	//Save the efficiency plots for b-tagging here if we're doing that.
+	if (makeBTagEffPlots){
+	  for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
+	    bTagEffPlots[i]->Write();
+	  }
+	}
+	mvaOutFile.Write();
+	mvaOutFile.Close();
+	for (unsigned int i = 0; i < mvaTree.size(); i++){
+	  delete mvaTree[i];
+	}
       }
-      std::cout << std::endl;
-      //Save the efficiency plots for b-tagging here if we're doing that.
+      if (infoDump){
+	std::cout << "In dataset " << dataset->getFillHisto() << " the cut flow looks like:" << std::endl;
+	for (int i = 0; i < cutFlowMap[dataset->getFillHisto()]->GetNbinsX(); i++){
+	  std::cout << stageNames[i] << "\t" << cutFlowMap[dataset->getFillHisto()]->GetBinContent(i+1) << std::endl;
+	}
+      }
+      std::cerr << "\nFound " << foundEvents << " in " << dataset->name() << std::endl;
+      //Delete plots from out btag vector. Avoid memory leaks, kids.
       if (makeBTagEffPlots){
 	for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
-	  bTagEffPlots[i]->Write();
+	  delete bTagEffPlots[i];
 	}
       }
-      mvaOutFile.Write();
-      mvaOutFile.Close();
-      for (unsigned int i = 0; i < mvaTree.size(); i++){
-	delete mvaTree[i];
-      }
-    }
-    if (infoDump){
-      std::cout << "In dataset " << dataset->getFillHisto() << " the cut flow looks like:" << std::endl;
-      for (int i = 0; i < cutFlowMap[dataset->getFillHisto()]->GetNbinsX(); i++){
-	std::cout << stageNames[i] << "\t" << cutFlowMap[dataset->getFillHisto()]->GetBinContent(i+1) << std::endl;
-      }
-    }
-    std::cerr << "\nFound " << foundEvents << " in " << dataset->name() << std::endl;
-    //Delete plots from out btag vector. Avoid memory leaks, kids.
-    if (makeBTagEffPlots){
-      for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
-	delete bTagEffPlots[i];
-      }
-    }
-    //datasetChain->MakeClass("AnalysisEvent");
+      //datasetChain->MakeClass("AnalysisEvent");
+    } // end channel loop.
     delete datasetChain;
   } //end dataset loop
 
