@@ -551,60 +551,6 @@ int main(int argc, char* argv[]){
 	  if (systInd > 0) systMask = systMask << 1;
 	}//end systematic loop
       
-<<<<<<< HEAD
-    } //end plots if
-    //If making either plots or doing the event dump, make cut flow object.
-    std::cerr << "Processing dataset " << dataset->name() << std::endl;
-    TChain * datasetChain = new TChain(dataset->treeName().c_str());
-    if (!usePostLepTree){
-      if (!dataset->fillChain(datasetChain,numFiles)){
-	std::cerr << "There was a problem constructing the chain for " << dataset->name() << ". Continuing with next dataset.\n";
-	continue;
-      }
-    }
-    else{
-      std::string inputPostfix = "";
-      inputPostfix += postfix;
-      inputPostfix += invertIsoCut?"invIso":"";
-      std::cout << "skims/"+dataset->name()+inputPostfix + "SmallSkim.root" << std::endl;
-      datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim.root").c_str());
-      std::ifstream secondTree(("skims/"+dataset->name()+inputPostfix + "SmallSkim1.root").c_str());
-      if (secondTree.good()) datasetChain->Add(("skims/"+dataset->name()+inputPostfix + "SmallSkim1.root").c_str());
-    }
-    cutObj->setMC(dataset->isMC());
-    cutObj->setEventInfoFlag(readEventList);
-    cutObj->setTriggerFlag(dataset->getTriggerFlag());
-    std::cout << "Trigger flag: " << dataset->getTriggerFlag() << std::endl;
-
-    std::cout << "Initalising b-Tag efficiency plots" << std::endl;
-    //Here we will initialise the b-tag eff plots if we are doing b-tag efficiencies
-    std::vector<TH2D*> bTagEffPlots;
-    std::vector<std::string> denomNum {"Denom","Num"};
-    std::vector<std::string> typesOfEff {"b","c","uds","g"};
-    if (makeBTagEffPlots && dataset->isMC()){
-      int ptBins = 4, etaBins = 4;
-      float ptMin = 0., ptMax = 200., etaMin = 0., etaMax = 2.4;
-      for (int unsigned denNum = 0; denNum < denomNum.size(); denNum++){
-	for (int unsigned type = 0; type < typesOfEff.size(); type++){
-	  bTagEffPlots.push_back(new TH2D(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[type]).c_str(),("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[type]).c_str(),ptBins,ptMin,ptMax,etaBins,etaMin,etaMax));
-	}
-      }
-      cutObj->setBTagPlots(bTagEffPlots,true);
-    }//end btag eff plots.
-
-    std::cout << "End b-Tag efficiency plots" << std::endl;
-   
-    std::cout << "Get Efficiency Plots from the file" << std::endl;
-    if (usePostLepTree && usebTagWeight && dataset->isMC()){
-      //Get efficiency plots from the file. Will have to be from post-lep sel trees I guess.
-      std::string inputPostfix = "";
-      inputPostfix += postfix;
-      inputPostfix += invertIsoCut?"invIso":"";
-      TFile * datasetFileForHists = new TFile(("skims/"+dataset->name() + inputPostfix + "SmallSkim.root").c_str(), "READ");
-      for (int unsigned denNum = 0; denNum < denomNum.size(); denNum++){
-	for (int unsigned eff = 0; eff < typesOfEff.size(); eff++){
-	  bTagEffPlots.push_back((TH2D*)(datasetFileForHists->Get(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[eff]).c_str())->Clone()));
-=======
       } //end plots if
       //If making either plots or doing the event dump, make cut flow object.
       std::cerr << "Processing dataset " << dataset->name() << std::endl;
@@ -657,7 +603,6 @@ int main(int argc, char* argv[]){
 	  for (int unsigned eff = 0; eff < typesOfEff.size(); eff++){
 	    bTagEffPlots.push_back((TH2D*)(datasetFileForHists->Get(("bTagEff_"+denomNum[denNum]+"_"+typesOfEff[eff]).c_str())->Clone()));
 	  }
->>>>>>> otherfork/master
 	}
 	for (int unsigned plotIt = 0; plotIt < bTagEffPlots.size(); plotIt++){
 	  bTagEffPlots[plotIt]->SetDirectory(0);
@@ -684,95 +629,6 @@ int main(int argc, char* argv[]){
 	cloneTree3 = datasetChain->CloneTree(0);
 	cutObj->setCloneTree(cloneTree,cloneTree2,cloneTree3);
       }
-<<<<<<< HEAD
-      cutObj->setBTagPlots(bTagEffPlots,false);
-      datasetFileForHists->Close();
-    }
-
-    std::cout << "Extracting dataset weight" << std::endl;
-    //extract the dataset weight.
-    float datasetWeight = dataset->getDatasetWeight(totalLumi);
-    std::cout << "Extracted dataset weight" << std::endl;
-
-    //Apply trigger SF here. Also does systematic for trigger +-
-    if (infoDump) datasetWeight = 1;
-    std::cout << "Creating \"AnalysisEvent\" event class" << std::endl;
-    AnalysisEvent * event = new AnalysisEvent(dataset->isMC(),dataset->getTriggerFlag(),datasetChain);
-    std::cout << "Created \"AnalysisEvent\" event class" << std::endl;
-
-    //Adding in some stuff here to make a skim file out of post lep sel stuff
-    std::cout << "Adding in some stuff to make a skim file out of the post lepton selection stuff ... " << std::endl;
-    TTree * cloneTree = 0;
-    TTree * cloneTree2 = 0;
-    if (makePostLepTree){
-      cloneTree = datasetChain->CloneTree(0);
-      cloneTree2 = datasetChain->CloneTree(0);
-      cutObj->setCloneTree(cloneTree,cloneTree2);
-    }
-    std::cout << "Finished setup for skim file made out of post lepton selection stuff ... " << std::endl;
-    
-    //If we're making the MVA tree, set it up here. 
-    std::cout << "Setting up the MVA tree" << std::endl;
-    std::vector<TTree *> mvaTree;
-    //Add a few variables into the MVA tree for easy access of stuff like lepton index etc
-    float eventWeight = 0;
-    int zLep1Index = -1; // Addresses in elePF2PATWhatever of the z lepton
-    int zLep2Index = -1;
-    int wLepIndex = -1;
-    int jetInd[15];  // The index of the selected jets;
-    int bJetInd[10]; // Index of selected b-jets;
-    //Now add in the branches:
-    std::cout << "Now adding in the branches ... " << std::endl;
-
-    if (makeMVATree){
-      int systMask = 1;
-      std::cout << "Making systematic trees for " << dataset->name() << ": ";
-      for (unsigned int systIn = 0; systIn < systNames.size(); systIn++){
-	std::cout << systNames[systIn] << " ";
-	//	std::cout << "Making systs: " << systMask << " " << systToRun << " " << systIn << " " << (systMask & systToRun) << std::endl;
-	/*	if (systIn > 0 && !(systMask & systToRun)){
-	  if (systIn > 0) systMask = systMask << 1;
-	  continue;
-	  }*/
-	mvaTree.push_back(datasetChain->CloneTree(0));
-	mvaTree[systIn]->SetName((mvaTree[systIn]->GetName()+systNames[systIn]).c_str());
-	mvaTree[systIn]->Branch("eventWeight", &eventWeight, "eventWeight/F");
-	mvaTree[systIn]->Branch("zLep1Index",&zLep1Index,"zLep1Index/I");
-	mvaTree[systIn]->Branch("zLep2Index",&zLep2Index,"zLep2Index/I");
-	mvaTree[systIn]->Branch("wLepIndex",&wLepIndex,"wLepIndex/I");
-	mvaTree[systIn]->Branch("jetInd",jetInd,"jetInd[15]/I");
-	mvaTree[systIn]->Branch("bJetInd",bJetInd,"jetInd[10]/I");
-
-	if (systIn > 0) systMask = systMask << 1;
-      }
-      std::cout <<std::endl;
-    }
-    /*    else{
-      event->fChain->SetBranchStatus("*",0); //Should disable most branches.
-      setBranchStatusAll(event->fChain,dataset->isMC(),dataset->getTriggerFlag());
-      }*/
-
-    std::cout << "Getting number of events ... " << std::endl;
-    int numberOfEvents = datasetChain->GetEntries();
-    std::cout << "numberOfEvents = " << numberOfEvents << std::endl;
-    std::cout << "datasetWeight = " << datasetWeight << std::endl;
-    if (nEvents && nEvents < numberOfEvents) numberOfEvents = nEvents;
-    //    datasetChain->Draw("numElePF2PAT","numMuonPF2PAT > 2");
-    //    TH1F * htemp = (TH1F*)gPad->GetPrimitive("htemp");
-    //    htemp->SaveAs("tempCanvas.png");
-    int foundEvents = 0;
-    for (int i = 0; i < numberOfEvents; i++){
-      if (i % 500 < 0.01) std::cerr << i << " (" << 100*float(i)/numberOfEvents << "%) with " << event->numElePF2PAT << " electrons. Found " << (synchCutFlow?cutObj->numFound():foundEvents) << " events.\r";
-      event->GetEntry(i);
-      //Do the systematics indicated by the systematic flag, oooor just do data if that's your thing. Whatevs.
-      int systMask = 1;
-      for (unsigned int systInd = 0; systInd < systNames.size(); systInd++){
-	if (!dataset->isMC() && systInd > 0) break;
-	//	std::cout << systInd << " " << systMask << std::endl;
-	if (systInd > 0 && !(systMask & systToRun)) {
-	  if (systInd > 0) systMask = systMask << 1;
-	  continue;
-=======
       //If we're making the MVA tree, set it up here. 
       std::vector<TTree *> mvaTree;
       //Add a few variables into the MVA tree for easy access of stuff like lepton index etc
@@ -804,7 +660,6 @@ int main(int argc, char* argv[]){
 	  mvaTree[systIn]->Branch("bJetInd",bJetInd,"jetInd[10]/I");
 
 	  if (systIn > 0) systMask = systMask << 1;
->>>>>>> otherfork/master
 	}
 	std::cout <<std::endl;
       }
@@ -935,24 +790,6 @@ int main(int argc, char* argv[]){
 	  
 	  }
 
-<<<<<<< HEAD
-	foundEvents++;
-	if (systInd > 0) systMask = systMask << 1;
-      }// End systematics loop.
-    } //end event loop
-
-    //If we're making post lepSel skims save the tree here
-    if (makePostLepTree){
-      TFile outFile(("skims/"+dataset->name() + postfix + (invertIsoCut?"invIso":"") + "SmallSkim.root").c_str(),"RECREATE");
-      outFile.cd();
-      std::cout << "\nPrinting some info on the tree " <<dataset->name() << " " << cloneTree->GetEntries() << std::endl;
-      std::cout << "But there were : " <<  datasetChain->GetEntries() << " entries in the original tree" << std::endl;
-      cloneTree->Write();
-      //If we're doing b-tag efficiencies, let's save them here.
-      if (makeBTagEffPlots){
-	for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
-	  bTagEffPlots[i]->Write();
-=======
 	  foundEvents++;
 	  if (systInd > 0) systMask = systMask << 1;
 	}// End systematics loop.
@@ -970,7 +807,6 @@ int main(int argc, char* argv[]){
 	  for (int unsigned i = 0; i < bTagEffPlots.size(); i++){
 	    bTagEffPlots[i]->Write();
 	  }
->>>>>>> otherfork/master
 	}
 	outFile.Write();
 	outFile.Close();
