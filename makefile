@@ -1,6 +1,7 @@
 # Adding in a few variables to change up flags etc
 
 CFLAGS = -g -O2 -pipe -Wall -W -Woverloaded-virtual -MMD -MP -fPIC -pthread -std=c++0x $(shell root-config --cflags) ${INCLUDE_PATH}
+LHAPDFFLAGS = `lhapdf-config --cflags --ldflags`
 
 INCLUDE_PATH = 	-I$(shell root-config --incdir) \
 		-Iinclude  \
@@ -9,8 +10,7 @@ INCLUDE_PATH = 	-I$(shell root-config --incdir) \
 
 LIBS = 	$(shell root-config --libs)\
 	 -L/home/eepgadm/lib/local/lib\
-	 -lconfig++
-
+	 -lconfig++ \
 
 default: tbZAnal.exe MvaFilesEventWeightIntegral.exe
 
@@ -21,7 +21,7 @@ _cleanall:
 	rm -rf *.d
 
 tbZAnal.exe: analysisMain.o config_parser.o dataset.o AnalysisEvent.o cutClass.o plots.o histogramPlotter.o
-	g++ $(CFLAGS) $(LIBS) -o tbZAnal.exe analysisMain.o config_parser.o dataset.o AnalysisEvent.o cutClass.o plots.o histogramPlotter.o
+	g++ $(CFLAGS) $(LIBS) $(LHAPDFFLAGS) -o tbZAnal.exe analysisMain.o config_parser.o dataset.o AnalysisEvent.o cutClass.o plots.o histogramPlotter.o
 
 analysisMain.o: analysisMain.cpp config_parser.h dataset.h cutClass.h
 	g++ $(CFLAGS) $(LIBS) -c analysisMain.cpp
