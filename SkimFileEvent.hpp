@@ -1,5 +1,4 @@
-
-///////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////
 // This class has been automatically generated on
 // Fri Oct 31 15:04:52 2014 by ROOT version 6.02/01
 // from TTree tree/tree
@@ -174,7 +173,7 @@ public :
    Float_t         genMuonPF2PATTheta[6];   //[numMuonPF2PAT]
    Float_t         genMuonPF2PATEta[6];   //[numMuonPF2PAT]
    Int_t           genMuonPF2PATCharge[6];   //[numMuonPF2PAT]
-   Int_t           numJetPF2PAT;					// Number of jets (multiplicity - not what we are interested - what we get direct out of CMSSW - mainly flucs and detector effects)
+   Int_t           numJetPF2PAT;// Number of jets (multiplicity - not what we are interested - what we get direct out of CMSSW - mainly flucs and detector effects)
    Double_t        jetPF2PATE[40];   //[numJetPF2PAT]
    Double_t        jetPF2PATEt[40];   //[numJetPF2PAT]
    Double_t        jetPF2PATPt[40];   //[numJetPF2PAT]
@@ -380,11 +379,13 @@ public :
    Float_t         genParE[14];   //[nGenPar]
    Float_t         genParPt[14];   //[nGenPar]
    Int_t           genParId[14];   //[nGenPar]
+   Int_t	   genParNumMothers[14];	//[nGenPar] - 150320 - ADM - # of mothers for gen level particle
+   Int_t	   genParMotherId[14];	//[nGenPar] - 150320 - ADM - Mother pid for gen level particle
+   Int_t	   genParNumDaughters[14];	///[nGenPar] - 150401 - ADM - # of daughters for gen level particle
    Int_t           genParCharge[14];   //[nGenPar]
    Int_t           eventRun;
    Int_t           eventNum;
    Float_t         eventLumiblock;
-   Float_t         eventWeight;
 
    // List of branches
    TBranch        *b_numElePF2PAT;   //!
@@ -742,11 +743,13 @@ public :
    TBranch        *b_genParE;   //!
    TBranch        *b_genParPt;   //!
    TBranch        *b_genParId;   //!
+   TBranch        *b_genParNumMothers; // 150320 - ADM - # of mothers for gen level particle
+   TBranch        *b_genParMotherId; // 150320 - ADM - Mother pid for gen level particle
+   TBranch	  *b_genParNumDaughters; // 150401 - ADM - # of daughters for gen level particle
    TBranch        *b_genParCharge;   //!
    TBranch        *b_eventRun;   //!
    TBranch        *b_eventNum;   //!
    TBranch        *b_eventLumiblock;   //!
-   TBranch        *b_eventWeight;
 
    SkimFileEvent(TTree *tree=0);
    virtual ~SkimFileEvent();
@@ -1175,11 +1178,13 @@ void SkimFileEvent::Init(TTree *tree)
    fChain->SetBranchAddress("genParE", genParE, &b_genParE);
    fChain->SetBranchAddress("genParPt", genParPt, &b_genParPt);
    fChain->SetBranchAddress("genParId", genParId, &b_genParId);
+   fChain->SetBranchAddress("genParNumMothers", genParNumMothers, &b_genParNumMothers); // 150320 - ADM - # of mothers for gen level particle
+   fChain->SetBranchAddress("genParMotherId", genParMotherId, &b_genParMotherId); // 150320 - ADM - Mother pid for gen level particle
+   fChain->SetBranchAddress("genParNumDaughters", genParNumDaughters, &b_genParNumDaughters); // 150401 - ADM - # of daughters for gen level particles
    fChain->SetBranchAddress("genParCharge", genParCharge, &b_genParCharge);
    fChain->SetBranchAddress("eventRun", &eventRun, &b_eventRun);
    fChain->SetBranchAddress("eventNum", &eventNum, &b_eventNum);
    fChain->SetBranchAddress("eventLumiblock", &eventLumiblock, &b_eventLumiblock);
-   fChain->SetBranchAddress("eventWeight", &eventWeight, &b_eventWeight);
    Notify();
 }
 
