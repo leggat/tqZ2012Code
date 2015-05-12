@@ -55,3 +55,5 @@ struct datasetInfo{
   std::string legLabel;
   std::string legType;
 };
+
+#endif
