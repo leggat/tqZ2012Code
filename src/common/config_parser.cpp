@@ -1,5 +1,5 @@
 //config_parser.cpp
-#include "config_parser.h"
+#include "config_parser.hpp"
 #include <iostream>
 #include <fstream>
 #include <string>

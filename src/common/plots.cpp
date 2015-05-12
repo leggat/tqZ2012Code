@@ -1,6 +1,7 @@
-#include "plots.h"
+#include "plots.hpp"
 #include <iostream>
 #include <cmath>
+#include <iomanip>
 #include "TLorentzVector.h"
 
 Plots::Plots(std::vector<std::string> names, std::vector<float> xMins, std::vector<float> xMaxs, std::vector<int> nBins, std::vector<std::string> fillExps, std::vector<std::string>  xAxisLabels, std::vector<int> cutStage, unsigned int thisCutStage, std::string postfixName){
@@ -13,7 +14,7 @@ Plots::Plots(std::vector<std::string> names, std::vector<float> xMins, std::vect
     plotPoint[i].plotHist = new TH1F(plotName.c_str(),plotName.c_str(),nBins[i],xMins[i],xMaxs[i]);
     plotPoint[i].fillExp = functionPointerMap[fillExps[i]];
     plotPoint[i].xAxisLabel = xAxisLabels[i];
-    plotPoint[i].fillPlot = cutStage[i] <= thisCutStage;
+    plotPoint[i].fillPlot = (unsigned int)cutStage[i] <= thisCutStage;
   }
   
 }
@@ -63,6 +64,7 @@ std::map<std::string, float (Plots::*)(AnalysisEvent*)> Plots::getFncPtrMap(){
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("zLepton2Phi",&Plots::fillZLep2Phi));
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("wLeptonPhi",&Plots::fillWLepPhi));
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("zPairMass",&Plots::fillZPairMass));
+  functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("zPairPt",&Plots::fillZPairPt));
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("wPair1Mass",&Plots::fillWPair1Mass));
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("wPair2Mass",&Plots::fillWPair2Mass));
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("lepMass",&Plots::fillLeptonMass));
@@ -79,6 +81,11 @@ std::map<std::string, float (Plots::*)(AnalysisEvent*)> Plots::getFncPtrMap(){
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("lep2InnerTrackD0",&Plots::fillLepton2InnerTrackD0));
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("lep3InnerTrackD0",&Plots::fillLepton3InnerTrackD0));  
   functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("wTransverseMass",&Plots::fillwTransverseMass));  
+  functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("jjDelR",&Plots::filljjDelR));  
+  functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("zLepDelR",&Plots::fillzLepDelR));  
+  functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("zLepDelPhi",&Plots::fillzLepDelPhi));  
+  functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("lbDelR",&Plots::filllbDelR));  
+  functionPointerMap.insert(std::pair<std::string, float(Plots::*)(AnalysisEvent*)>("lbDelPhi",&Plots::filllbDelPhi));  
 
   return functionPointerMap;
 }
@@ -306,6 +313,10 @@ float Plots::fillZPairMass(AnalysisEvent* event){
   return (event->zPairLeptons.first + event->zPairLeptons.second).M();
 }
 
+float Plots::fillZPairPt(AnalysisEvent* event){
+  return (event->zPairLeptons.first + event->zPairLeptons.second).Pt();
+}
+
 float Plots::fillWPair1Mass(AnalysisEvent* event){
   return (event->zPairLeptons.first + event->wLepton).M();
 }
@@ -420,9 +431,43 @@ float Plots::fillwTransverseMass(AnalysisEvent* event){
   return std::sqrt(2*event->metPF2PATPt*event->wLepton.Pt()*(1-cos(event->metPF2PATPhi - event->wLepton.Phi())));
 }
 
+float Plots::filljjDelR(AnalysisEvent* event){
+  TLorentzVector tempJet1;
+  TLorentzVector tempJet2;
+  if (event->jetIndex.size() < 2) return -1.;
+  tempJet1.SetPxPyPzE(event->jetPF2PATPx[event->jetIndex[0]],event->jetPF2PATPy[event->jetIndex[0]],event->jetPF2PATPz[event->jetIndex[0]],event->jetPF2PATE[event->jetIndex[0]]);
+  tempJet2.SetPxPyPzE(event->jetPF2PATPx[event->jetIndex[1]],event->jetPF2PATPy[event->jetIndex[1]],event->jetPF2PATPz[event->jetIndex[1]],event->jetPF2PATE[event->jetIndex[1]]);
+  return tempJet1.DeltaR(tempJet2);
+}
+
+float Plots::fillzLepDelR(AnalysisEvent* event){
+  return (event->zPairLeptons.first.DeltaR(event->zPairLeptons.second));
+}
+
+float Plots::fillzLepDelPhi(AnalysisEvent* event){
+  return (event->zPairLeptons.first.DeltaPhi(event->zPairLeptons.second));
+}
+
+float Plots::filllbDelR(AnalysisEvent* event){
+  TLorentzVector tempJet1;
+  if (event->bTagIndex.size() < 1) return -10.;
+  tempJet1.SetPxPyPzE(event->jetPF2PATPx[event->jetIndex[event->bTagIndex[0]]],event->jetPF2PATPy[event->jetIndex[event->bTagIndex[0]]],event->jetPF2PATPz[event->jetIndex[event->bTagIndex[0]]],event->jetPF2PATE[event->jetIndex[event->bTagIndex[0]]]);
+  return tempJet1.DeltaR(event->wLepton);
+
+}
+
+float Plots::filllbDelPhi(AnalysisEvent* event){
+  TLorentzVector tempJet1;
+  if (event->bTagIndex.size() < 1) return -10.;
+  tempJet1.SetPxPyPzE(event->jetPF2PATPx[event->jetIndex[event->bTagIndex[0]]],event->jetPF2PATPy[event->jetIndex[event->bTagIndex[0]]],event->jetPF2PATPz[event->jetIndex[event->bTagIndex[0]]],event->jetPF2PATE[event->jetIndex[event->bTagIndex[0]]]);
+  return tempJet1.DeltaPhi(event->wLepton);
+}
+
 void Plots::fillAllPlots(AnalysisEvent* event, float eventWeight){
   for (unsigned int i = 0; i < plotPoint.size(); i++){
-    if (plotPoint[i].fillPlot) plotPoint[i].plotHist->Fill((this->*plotPoint[i].fillExp)(event),eventWeight);
+    if (plotPoint[i].fillPlot){
+      plotPoint[i].plotHist->Fill((this->*plotPoint[i].fillExp)(event),eventWeight);
+    }
   }
 }
 

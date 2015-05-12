@@ -1,4 +1,4 @@
-#include "histogramPlotter.h"
+#include "histogramPlotter.hpp"
 #include "TCanvas.h"
 #include "TPad.h"
 #include "TStyle.h"
@@ -21,6 +21,7 @@ HistogramPlotter::HistogramPlotter(std::vector<std::string> legOrder, std::vecto
   legOrder_(legOrder),
   dsetMap_(dsetMap)
 {
+  gErrorIgnoreLevel = kInfo;
 
   extensions_.push_back(".root");
   extensions_.push_back(".png");
@@ -102,6 +103,7 @@ void HistogramPlotter::makePlot(std::map<std::string, TH1F*> plotMap, std::strin
   for (std::vector<std::string>::iterator leg_iter = legOrder_.begin(); leg_iter != legOrder_.end(); leg_iter++){
     legend_.AddEntry(plotMap[*leg_iter], dsetMap_[*leg_iter].legLabel.c_str(), dsetMap_[*leg_iter].legType.c_str());
   }
+    
   //Initialise the stack
   THStack mcStack = THStack(plotName.c_str(),plotName.c_str());
   //Do a few colour changing things and add MC to the stack.
@@ -117,7 +119,6 @@ void HistogramPlotter::makePlot(std::map<std::string, TH1F*> plotMap, std::strin
     }
     mcStack.Add(plotMap[*plot_iter]);
   }
-
   TCanvas * canvy = new TCanvas((plotName + subLabel + postfix_).c_str(), (plotName + subLabel + postfix_).c_str());
   canvy->cd();
 
