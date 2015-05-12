@@ -75,7 +75,7 @@ ${LIBRARY_OBJECT_FILES}: obj/%.o : src/common/%.cpp
 
 
 ${EXECUTABLES}: bin/%.exe: obj/%.o ${EXECUTABLE_OBJECT_FILES}
-	g++ ${LINK_EXECUTABLE_FLAGS} $< -o $@
+	g++ ${LINK_EXECUTABLE_FLAGS} $(LHAP) $< -o $@
 
 ${EXECUTABLE_OBJECT_FILES}: obj/%.o : src/common/%.cxx
 	mkdir -p {bin,obj,lib}
