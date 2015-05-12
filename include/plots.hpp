@@ -52,6 +52,7 @@ class Plots{
   float fillZLep2MVA(AnalysisEvent*);
   float fillWLepMVA(AnalysisEvent*);
   float fillZPairMass(AnalysisEvent*);
+  float fillZPairPt(AnalysisEvent*);
   float fillWPair1Mass(AnalysisEvent*);
   float fillWPair2Mass(AnalysisEvent*);
   float fillLeptonMass(AnalysisEvent*);
@@ -68,6 +69,11 @@ class Plots{
   float fillLepton2InnerTrackD0(AnalysisEvent*);
   float fillLepton3InnerTrackD0(AnalysisEvent*);
   float fillwTransverseMass(AnalysisEvent*);
+  float filljjDelR(AnalysisEvent*);
+  float fillzLepDelR(AnalysisEvent*);
+  float fillzLepDelPhi(AnalysisEvent*);
+  float filllbDelR(AnalysisEvent*);
+  float filllbDelPhi(AnalysisEvent*);
 
  public:
   Plots(std::vector<std::string>,std::vector<float>,std::vector<float>,std::vector<int>,std::vector<std::string>, std::vector<std::string>, std::vector<int>, unsigned int, std::string postfixName="");

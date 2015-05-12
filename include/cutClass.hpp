@@ -70,9 +70,12 @@ class Cuts{
   float looseMuonEta_;
   float looseMuonRelIso_;
   
+  //z cuts
+  float invZMassCut_;
 
   //Tight jet cuts
   unsigned int numJets_;
+  unsigned int maxJets_;
   float jetPt_;
   float jetEta_;
   int jetNConsts_;
@@ -80,6 +83,7 @@ class Cuts{
 
   //B-Disc cut
   unsigned int numbJets_;
+  unsigned int maxbJets_;
   float bDiscCut_;
   
   //set to true to fill in histograms.
@@ -88,21 +92,6 @@ class Cuts{
   bool invertIsoCut_; // For background estimation
   bool synchCutFlow_; //For synch
   bool singleEventInfoDump_; //For dropping info on event for synching.
-
-  //For producing post-lepsel skims
-  TTree* postLepSelTree_;
-  TTree* postLepSelTree2_;
-  TTree* postLepSelTree3_;
-
-  //For removing trigger cuts. Will be set to false by default
-  bool skipTrigger_;
-
-  //For making b-tagging efficiencies. Needed for reweighting and systematics.
-  bool makeBTagEffPlots_;
-  //And the efficiency plots.
-  std::vector<TH2D*> bTagEffPlots_;
-  bool getBTagWeight_;
-  void getBWeight(AnalysisEvent *, TLorentzVector, int, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*);
 
   //Some things that will be used for JEC uncertainties.
   std::vector<float> ptMinJEC_;
@@ -132,6 +121,25 @@ class Cuts{
   std::string triggerFlag_;
   std::string postfixName_;
 
+  //For producing post-lepsel skims
+  TTree* postLepSelTree_;
+  TTree* postLepSelTree2_;
+  TTree* postLepSelTree3_;
+
+  //For removing trigger cuts. Will be set to false by default
+  bool skipTrigger_;
+
+  //For making b-tagging efficiencies. Needed for reweighting and systematics.
+  bool makeBTagEffPlots_;
+  //And the efficiency plots.
+  std::vector<TH2D*> bTagEffPlots_;
+  bool getBTagWeight_;
+  void getBWeight(AnalysisEvent *, TLorentzVector, int, float*, float*, float*, float*, float*, float*, float*, float*, float*, float*);
+
+  //met and mtw cut values
+  float metCut_;
+  float mTWCut_;
+
   //Sets trigger from config file
   std::string cutConfTrigLabel_;
 
@@ -148,6 +156,9 @@ class Cuts{
   void setTriggerFlag(std::string triggerFlag) {triggerFlag_ = triggerFlag;};
   void setBTagPlots(std::vector<TH2D*> vec, bool makePlotsOrRead) {makeBTagEffPlots_ = makePlotsOrRead; bTagEffPlots_ = vec;getBTagWeight_ = !makePlotsOrRead;};
   void setSkipTrig(bool skip){skipTrigger_ = skip;};
+  void setMetCut(float cut){metCut_ = cut;};
+  void setMTWCut(float cut){mTWCut_ = cut;};
+  void setJetRegion(int nJets, int nBets, int maxJets, int maxBJets){numJets_ = nJets; numbJets_ = nBets; maxJets_ = maxJets; maxbJets_ = maxBJets;};
   bool parse_config(std::string);
   void dumpLeptonInfo(AnalysisEvent*);
   void dumpLooseLepInfo(AnalysisEvent*);
