@@ -32,6 +32,7 @@ LIBRARIES = 	-lCore \
 		-lconfig++ \
 		-lLHAPDF \
 		-lz \
+		-lg \
 
 INCLUDE_PATH = 	-Iinclude  \
 		-I/home/eepgadm/root/include \
@@ -41,9 +42,6 @@ INCLUDE_PATH = 	-Iinclude  \
 CFLAGS = -g -O2 -pipe -Wall -W -Woverloaded-virtual -MMD -MP -fPIC -pthread -std=c++0x $(shell root-config --cflags) ${INCLUDE_PATH}
 
 LHAPDFFLAGS = `lhapdf-config --cflags --ldflags`
-LHAPDFLAGS = -I$(shell cd ${CMSSW_BASE}; scram tool tag lhapdffull INCLUDE) -L$(shell cd ${CMSSW_BASE}; scram tool tag lhapdffull LIBDIR) -lLHAPDF -lgfortran -lz
-LHAP = -I/cms/cmssw/slc6_amd64_gcc472/external/lhapdf/5.9.1-cms/full/include -L/cms/cmssw/slc6_amd64_gcc472/external/lhapdf/5.9.1-cms/full/lib -lLHAPDF
-INCLUDEFLAGS := -I/cms/cmssw/slc6_amd64_gcc472/external/lhapdf/5.9.1-cms/include/ =L/cms/cmssw/slc6_amd64_gcc472/external/lhapdf/5.9.1-cms/lib/ -lLHAPDF -lg
 
 LINK_LIBRARY_FLAGS = -shared -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES}
 LINK_EXECUTABLE_FLAGS = -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES} -lTQZanalysisTools
@@ -78,6 +76,6 @@ ${EXECUTABLES}: bin/%.exe: obj/%.o ${EXECUTABLE_OBJECT_FILES}
 
 ${EXECUTABLE_OBJECT_FILES}: obj/%.o : src/common/%.cxx
 	mkdir -p {bin,obj,lib}
-	g++ -c ${CFLAGS}  $< -o $@
+	g++ -c ${CFLAGS} $< -o $@
 
 -include $(EXECUTABLE_OBJECT_FILES:.o=.d)
