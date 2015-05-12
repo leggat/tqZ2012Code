@@ -41,6 +41,7 @@ INCLUDE_PATH = 	-Iinclude  \
 CFLAGS = -g -O2 -pipe -Wall -W -Woverloaded-virtual -MMD -MP -fPIC -pthread -std=c++0x $(shell root-config --cflags) ${INCLUDE_PATH}
 
 LHAPDFFLAGS = `lhapdf-config --cflags --ldflags`
+
 ROOTSYS = /home/eepgadm/root/
 
 LINK_LIBRARY_FLAGS = -shared -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES}
@@ -72,7 +73,7 @@ ${LIBRARY_OBJECT_FILES}: obj/%.o : src/common/%.cpp
 
 
 ${EXECUTABLES}: bin/%.exe: obj/%.o ${EXECUTABLE_OBJECT_FILES}
-	g++ ${LINK_EXECUTABLE_FLAGS} $(LHAPDFFLAGS) $< -o $@
+	g++ ${LINK_EXECUTABLE_FLAGS} $< -o $@
 
 ${EXECUTABLE_OBJECT_FILES}: obj/%.o : src/common/%.cxx
 	mkdir -p {bin,obj,lib}
