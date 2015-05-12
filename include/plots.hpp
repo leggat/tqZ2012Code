@@ -1,5 +1,5 @@
 #ifndef _plots_hpp_
-#define _plots_hpp
+#define _plots_hpp_
 
 #include <string>
 #include "TH1.h"
