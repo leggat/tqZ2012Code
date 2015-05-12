@@ -2,7 +2,7 @@
 
 LIBRARY_SOURCES = $(wildcard src/common/*.cpp)
 LIBRARY_OBJECT_FILES = $(patsubst src/common/%.cpp,obj/%.o,${LIBRARY_SOURCES})
-LIBRARY = lib/libBdtPtTools.so
+LIBRARY = lib/libtqZanalysisTools.so
 
 
 EXECUTABLE_SOURCES = $(wildcard src/common/*.cxx)
@@ -43,7 +43,7 @@ CFLAGS = -g -O2 -pipe -Wall -W -Woverloaded-virtual -MMD -MP -fPIC -pthread -std
 LHAPDFFLAGS = `lhapdf-config --cflags --ldflags`
 
 LINK_LIBRARY_FLAGS = -shared -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES}
-LINK_EXECUTABLE_FLAGS = -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES} -lBdtPtTools
+LINK_EXECUTABLE_FLAGS = -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES} -ltqZanalysisTools
 
 .PHONY: all _all clean _cleanall build _buildall install _installall rpm _rpmall test _testall spec_update
 
