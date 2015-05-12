@@ -17,6 +17,84 @@
 #include <math.h>
 #include <LHAPDF/LHAPDF.h>
 
+double zptSF(TString channel, float zpt){
+
+  double param1 = 0;
+  double param2 = 0;
+  double param3 = 0;
+
+  if(channel == "mumumu"){
+    //mumumu
+    //1  p0           1.64891e+00   9.46744e-02   8.94955e-05 5.38436e-04
+    //2  p1          -3.18363e-02   1.83020e-03   1.43202e-06 2.28732e-02
+    //3  p2           1.96813e-01   1.80560e-02   2.59898e-05 7.20918e-03
+
+    //1  p0           9.12190e-01   6.16931e-02   8.40864e-05 3.40620e-05
+    //2  p1          -2.12648e-02   1.47982e-03   1.38426e-06 2.38949e-01
+    //3  p2           2.32868e-01   2.61906e-02   3.56068e-05 8.38502e-03
+
+
+    param1 = 9.12190e-01;
+    param2 =-2.12648e-02;
+    param3 = 2.32868e-01;
+
+  }
+
+  if(channel == "emumu"){
+    //mumue
+    //1  p0           1.08009e+00   2.20412e-01   1.81954e-04 -2.77029e-04
+    //2  p1          -1.83319e-02   2.98128e-03   1.46500e-06 -2.16667e-02
+    //3  p2          -3.79236e-03   2.77700e-02   1.94305e-05 -8.63841e-05
+
+    //1  p0           5.88293e-01   5.43378e-02   6.56657e-05 -2.55726e-03
+    //2  p1          -9.58817e-03   1.49703e-03   6.91871e-07 1.64841e-01
+    //3  p2          -3.15588e-02   7.50287e-02   3.63099e-05 1.24242e-03
+
+
+    param1 =  5.88293e-01;
+    param2 = -9.58817e-03;
+    param3 = -3.15588e-02;
+  }
+
+  if(channel == "eemu"){
+    //eemu
+    //1  p0           1.81997e+00   1.09691e-01   1.27075e-04 2.67625e-03
+    //2  p1          -3.53330e-02   2.11348e-03   2.01050e-06 2.95414e-01
+    //3  p2           2.00004e-01   1.93575e-02   3.33897e-05 1.34863e-02
+
+    //1  p0           1.03732e+00   6.79924e-02   1.10651e-04 -4.52533e-02
+    //2  p1          -2.11550e-02   1.34032e-03   1.62803e-06 -2.88549e+00
+    //3  p2           1.52830e-01   2.17467e-02   4.20291e-05 -5.57304e-02
+
+
+    param1 = 1.03732e+00;
+    param2 =-2.11550e-02;
+    param3 = 1.52830e-01;
+  }
+
+
+  if(channel == "eee"){
+    //eee
+    //1  p0           1.66655e+00   2.04856e-01   1.22417e-04 -8.87600e-06
+    // 2  p1          -2.90064e-02   3.37196e-03   1.67677e-06 1.94266e-05
+    //3  p2           1.12276e-01   2.87604e-02   2.89272e-05 -1.94049e-07
+
+    //1  p0           8.23251e-01   8.60477e-02   6.95364e-05 3.23597e-03
+    //2  p1          -1.74036e-02   2.04299e-03   1.02005e-06 2.12854e-01
+    //3  p2           1.64031e-01   4.57851e-02   3.12269e-05 7.55832e-03
+    param1 = 8.23251e-01;
+    param2 = -1.74036e-02;
+    param3 = 1.64031e-01;
+  }
+
+
+  return  (exp(param1+param2*zpt) +param3 );
+}
+
+
+
+
+
 //This method is here to set up a load of branches in the TTrees that I will be analysing. Because it's vastly quicker to not load the whole damned thing.
 void setBranchStatusAll(TTree * chain, bool isMC, std::string triggerFlag){
   //Get electron branches
@@ -147,7 +225,7 @@ static void show_usage(std::string name){
 	    << "\t-i\t\t\t\tInvert the isolation cut of the third lepton. This is for background estimation purposes. \n\t\t\t\t\tWho knows how I am supposed to use that though.\n"
 	    << "\t-a  --synch\t\t\tMakes cutflows for synch exercise i.e. detailed lepSel cutflows. Doesn't do full event selection.\n"
 	    << "\t-e\t\t\t\tGive a comma separated list of events to run on. This is for synch, but might be useful later?\n"
-	    << "\t-f  --nFiles NFILES\t\tUses a specific number of files to run over. \n\t\t\t\t\tThis is useful if testing stuff so that it doesn't have to access the T2 a lot etc.\n"
+	    << "\t-f  --nFiles \tNFILES\t\tUses a specific number of files to run over. \n\t\t\t\t\tThis is useful if testing stuff so that it doesn't have to access the T2 a lot etc.\n"
 	    << "\t-m\t\t\t\tMonte carlo only mode. Will not run over any data in the configuration.\n"
 	    << "\t-b\t\t\t\tData only mode. Only runs over data, skips all MC.\n"
 	    << "\t-t\t\t\t\tUse b-tagging efficiencies to reweight MC\n"
@@ -155,17 +233,21 @@ static void show_usage(std::string name){
 	    << "\t-g\t\t\t\tMakes post-lepSel tree\n"
 	    << "\t-u\t\t\t\tUses post-lepSel trees\n"
 	    << "\t-z  --makeMVATree\t\tProduce a tree after event selection for MVA purposes\n"
-	    << "\t-v  --syst  SYST\t\tDo the desired systematic. Brief workaround here, not final yet\n"
+	    << "\t-v  --syst  \tSYST\t\tDo the desired systematic. Brief workaround here, not final yet\n"
 	    << "\t-j\t\t\t\tMake b-tagging efficiency histograms. Probably doesn't need to be run too many times.\n"
-	    << "\t-k          CHANS\t\tBit mask dealy for the channels. 1 - eee 2 - eemu 4 - emumu 8 - mumumu 16 through 128 are same but for inverted third lep iso.\n"
+	    << "\t-k          \tCHANS\t\tBit mask dealy for the channels. 1 - eee 2 - eemu 4 - emumu 8 - mumumu 16 through 128 are same but for inverted third lep iso.\n"
 	    << "\t    --skipTrig\t\t\tSkip running triggers. Used for trigger studies or something.\n"
-	    << "zt    --mvaDir DIR\t\tChange the name of the folder the mva outputs go to. mvaTest/ by default. Include the /\n."
+	    << "\t    --mvaDir \tDIR\t\tChange the name of the folder the mva outputs go to. mvaTest/ by default. Include the /.\n"
+	    << "\t    --jetRegion \t\tSet the jet region that the analysis will look at. Takes arguments NJETS,NBJETS,MAXJETS,MAXBJETS.\n"
+	    << "\t    --metCut \tCUT\t\tAlter the MET cut of the analysis. 0 by default.\n"
+	    << "\t    --mtwCut \tCUT\t\tAlter the mTW cut of the analysis. 0 by default.\n"
 	    << "\t-h  --help\t\t\tShow this help message\n"
 	    << std::endl;
 }
 		       
 int main(int argc, char* argv[]){
 
+  gErrorIgnoreLevel = kInfo;
   //Set up environment a little.
   std::cerr << std::setprecision(1) << std::fixed;
   std::cout << std::setprecision(1) << std::fixed;
@@ -178,7 +260,7 @@ int main(int argc, char* argv[]){
   //Various variables that will be used in the analysis. These should really be in a .h file but... I'm lazy. Sorry.
   std::string config = "";
   bool plots = false;
-  double usePreLumi = 20000.;
+  double usePreLumi = 19700.;
   long nEvents = 0.;
   std::string outFolder = "plots/";
   std::string postfix = "default";
@@ -202,6 +284,9 @@ int main(int argc, char* argv[]){
   int channelsToRun = 0; //0 makes it run the one in the config, I guess.
   bool skipTrig = false;
   std::string mvaDir = "mvaTest/";
+  bool customJetRegion = false;
+  float metCut = 0.;
+  float mtwCut = 0.;
 
   // variables for plotting. 
   std::vector<std::string> plotNames;
@@ -211,6 +296,7 @@ int main(int argc, char* argv[]){
   std::vector<std::string> fillExp;
   std::vector<std::string> xAxisLabels;
   std::vector<int> eventNumbers;
+  std::vector<unsigned int> jetRegVars;
 
 
   // Loop for parsing command line arguments.
@@ -311,7 +397,7 @@ int main(int argc, char* argv[]){
       std::stringstream ss(argv[++i]);
       std::string item;
       while (std::getline(ss,item,',')){
-	eventNumbers.push_back(atoi(item.c_str()));
+	jetRegVars.push_back(atoi(item.c_str()));
       }
     }
     else if (arg == "-g"){
@@ -351,6 +437,25 @@ int main(int argc, char* argv[]){
     else if (arg == "--mvaDir"){
       mvaDir = argv[++i];
     }
+    else if (arg == "--jetRegion"){
+      customJetRegion = true;
+      std::stringstream ss(argv[++i]);
+      std::string item;
+      while (std::getline(ss,item,',')){
+	jetRegVars.push_back(atoi(item.c_str()));
+      }
+      std::cout << "CAUTION! Using a custom jet region of "<< jetRegVars[0] << "-" << jetRegVars[2] << " jets, and " << jetRegVars[1] << "-" << jetRegVars[3] << " b-jets" <<std::endl;
+
+    }
+    else if (arg == "--metCut"){
+      metCut = atof(argv[++i]);
+      std::cout << "Non zero MET cut! Applied " << metCut << " cut." << std::endl;
+    }
+    else if (arg == "--mtwCut"){
+      mtwCut = atof(argv[++i]);
+      std::cout << "Non zero mTW cut! Applied " << mtwCut << " cut." << std::endl;
+    }
+    
   } // End command line arguments loop.
   if (config == ""){
     std::cerr << "We need a configuration file! Type -h for usage. Error";
@@ -398,7 +503,10 @@ int main(int argc, char* argv[]){
   };
   //For studying some trigger things. Default is false.
   cutObj->setSkipTrig(skipTrig);
-  
+  if (customJetRegion) cutObj->setJetRegion(jetRegVars[0],jetRegVars[1],jetRegVars[2],jetRegVars[3]);
+  cutObj->setMetCut(metCut);
+  cutObj->setMTWCut(mtwCut);
+
   if (channelsToRun){
     std::cout << "Running over the channels: " << std::endl;
     for (unsigned int channelInd = 1; channelInd != 256; channelInd = channelInd << 1){
@@ -461,6 +569,7 @@ int main(int argc, char* argv[]){
   //Initialise PDFs
   if (systToRun & 1024 || systToRun & 2048){
     LHAPDF::initPDFSet(1, "CT10nnlo.LHgrid");
+    //LHAPDF::initPDFSet(1, "cteq6ll.LHpdf");
   }
   //    LHAPDF::initPDFSet(1, "CT10nnlo.LHgrid");
 
@@ -471,21 +580,25 @@ int main(int argc, char* argv[]){
   stageNames = {"lepSel","zMass","jetSel","bTag"};
 
   //Make the plots. If plots have been set. Changing this to a map.
-  std::map<std::string, std::map<std::string, Plots*> > plotsMap;
+  std::map<std::string, std::map<std::string, std::map<std::string, Plots*> > > plotsMap;
   std::map<std::string, TH1F*> cutFlowMap;
 
   //A couple of things for plotting. These will soon be set in a config file.
   std::vector<std::string> legOrder;
-  std::vector<std::string> plotOrder;
+  std::vector<std::string > plotOrder;
   std::map<std::string, datasetInfo> datasetInfos;
+
+  std::vector<std::string> plotsVec;
 
   bool datasetFilled = false;
 
   if (totalLumi == 0.) totalLumi = usePreLumi;
+  std::cout << "Using lumi: " << totalLumi << std::endl;
   for (std::vector<Dataset>::iterator dataset = datasets.begin(); dataset!=datasets.end(); ++dataset){
     datasetFilled = false;
     TChain * datasetChain = new TChain(dataset->treeName().c_str());
     for (unsigned int channelInd = 1; channelInd != 256; channelInd = channelInd << 1){
+      std::string chanName = "";
       if (!(channelInd & channelsToRun) && channelsToRun) continue;
       if (channelsToRun){
 	if (channelInd & 17){ // eee channels
@@ -493,32 +606,38 @@ int main(int argc, char* argv[]){
 	  cutObj->setCutConfTrigLabel("e");
 	  channel = "eee";
 	  postfix = "eee";
+	  chanName += "eee";
 	}
 	if (channelInd & 34){ //eemu channels
 	  cutObj->setNumLeps(1,1,2,2);
 	  cutObj->setCutConfTrigLabel("d");
 	  channel = "eemu";
 	  postfix = "eemu";
+	  chanName += "eemu";
 	}
 	if (channelInd & 68){ // emumu channels
 	  cutObj->setNumLeps(2,2,1,1);
 	  cutObj->setCutConfTrigLabel("d");
 	  channel = "emumu";
 	  postfix = "emumu";
+	  chanName += "emumu";
 	}
 	if (channelInd & 136){ // mumumu channels
 	  cutObj->setNumLeps(3,3,0,0);
 	  cutObj->setCutConfTrigLabel("m");
 	  channel = "mumumu";
 	  postfix = "mumumu";
+	  chanName += "mumumu";
 	}
 	if (channelInd & 15){ //nominal samples
 	  cutObj->setInvIsoCut(false);
 	  invertIsoCut = false;
+	  chanName += "nom";
 	}
 	if (channelInd & 240){ //inv iso samples
 	  cutObj->setInvIsoCut(true);
 	  invertIsoCut = true;
+	  chanName += "inv";
 	}
      } 
       if (dataset->isMC() && skipMC) continue;
@@ -531,20 +650,23 @@ int main(int argc, char* argv[]){
 	    continue;
 	  } 
 	  if (cutFlowMap.find(dataset->getFillHisto()+systNames[systInd]) == cutFlowMap.end()){
-	    legOrder.push_back(dataset->getFillHisto());
-	    plotOrder.push_back(dataset->getFillHisto());
 	    cutFlowMap[dataset->getFillHisto()] = new TH1F((dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),(dataset->getFillHisto()+systNames[systInd]+"cutFlow").c_str(),4,0,4); //Hopefully make this configurable later on. Same deal as the rest of the plots I guess, work out libconfig.
-	    if (systInd == 0){
+	    if (systInd == 0 && datasetInfos.find(dataset->getFillHisto()) == datasetInfos.end()){
+	      legOrder.push_back(dataset->getFillHisto());
+	      plotOrder.push_back(dataset->getFillHisto());
 	      datasetInfos[dataset->getFillHisto()] = datasetInfo();
 	      datasetInfos[dataset->getFillHisto()].colour = dataset->getColour();
 	      datasetInfos[dataset->getFillHisto()].legLabel = dataset->getPlotLabel();
 	      datasetInfos[dataset->getFillHisto()].legType = dataset->getPlotType();
 	    }
 	    if (plots){ // Only make all the plots if it's entirely necessary.
-	      plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()] = std::map<std::string,Plots*>();
-	  
+	      std::cout << "Made plots under" << (dataset->getFillHisto()+systNames[systInd]+channel).c_str() << std::endl; 
+	      if (plotsMap.find(channel) == plotsMap.end()){
+		plotsVec.push_back(systNames[systInd]+channel);
+	      }
+	      plotsMap[systNames[systInd]+channel][(dataset->getFillHisto()).c_str()] = std::map<std::string,Plots*>();
 	      for (unsigned int j = 0; j < stageNames.size(); j++){
-		plotsMap[(dataset->getFillHisto()+systNames[systInd]).c_str()][stageNames[j]] = new Plots(plotNames, xMin, xMax,nBins, fillExp, xAxisLabels, cutStage, j, dataset->getFillHisto()+"_"+stageNames[j]+systNames[systInd]);
+		plotsMap[systNames[systInd]+channel][(dataset->getFillHisto()).c_str()][stageNames[j]] = new Plots(plotNames, xMin, xMax,nBins, fillExp, xAxisLabels, cutStage, j, dataset->getFillHisto()+"_"+stageNames[j]+systNames[systInd]+"_"+channel);
 	      }
 	    }
 	  }//end cutFlow find loop
@@ -686,7 +808,7 @@ int main(int argc, char* argv[]){
 	    if (systInd > 0) systMask = systMask << 1;
 	    continue;
 	  }
-	  eventWeight = event->getEventWeight(i);
+	  eventWeight = 1;
 	  //apply trigger weights here.
 	  if (dataset->isMC()){
 	    float pileupWeight = puReweight->GetBinContent(puReweight->GetXaxis()->FindBin(event->numVert));
@@ -694,21 +816,21 @@ int main(int argc, char* argv[]){
 	    if (systMask == 128) pileupWeight = puSystDown->GetBinContent(puSystDown->GetXaxis()->FindBin(event->numVert));
 	    eventWeight *= pileupWeight;
 	    if (channel == "eee"){
-	      float twgt = 0.9975;
-	      if (systInd > 0 && (systMask == 1)) twgt += 0.0455;
-	      if (systInd > 0 && (systMask == 2)) twgt -= 0.0354;
+	      float twgt = 0.987;
+	      if (systInd > 0 && (systMask == 1)) twgt += 0.036;
+	      if (systInd > 0 && (systMask == 2)) twgt -= 0.036;
 	      eventWeight *= twgt;
 	    }
 	    else if (channel == "eemu"){
-	      float twgt = 0.9451;
-	      if (systInd > 0 && (systMask == 1)) twgt += 0.0394;
-	      if (systInd > 0 && (systMask == 2)) twgt -= 0.0408;
+	      float twgt = 0.987;
+	      if (systInd > 0 && (systMask == 1)) twgt += 0.035;
+	      if (systInd > 0 && (systMask == 2)) twgt -= 0.035;
 	      eventWeight *= twgt;
 	    }
 	    if (channel == "emumu"){
-	      float twgt = 0.9001;
-	      if (systInd > 0 && (systMask == 1)) twgt += 0.0565;
-	      if (systInd > 0 && (systMask == 2)) twgt -= 0.0422;
+	      float twgt = 0.886;
+	      if (systInd > 0 && (systMask == 1)) twgt += 0.042;
+	      if (systInd > 0 && (systMask == 2)) twgt -= 0.042;
 	      eventWeight *= twgt;
 	    }
 	    if (channel == "mumumu"){
@@ -735,7 +857,7 @@ int main(int argc, char* argv[]){
 	
 	  }
 	  eventWeight*=datasetWeight;
-	  if (!cutObj->makeCuts(event,&eventWeight,plotsMap[dataset->getFillHisto()+systNames[systInd]],cutFlowMap[dataset->getFillHisto()+systNames[systInd]],systInd?systMask:systInd)) {
+	  if (!cutObj->makeCuts(event,&eventWeight,plotsMap[systNames[systInd]+channel][dataset->getFillHisto()],cutFlowMap[dataset->getFillHisto()+systNames[systInd]],systInd?systMask:systInd)) {
 	    if (systInd) systMask = systMask << 1;
 	    continue;
 	  }
@@ -760,6 +882,7 @@ int main(int argc, char* argv[]){
 	      LHAPDF::usePDFMember(1,i);
 	      double xpdf1_new = LHAPDF::xfx(1, x1, q, id1);
 	      double xpdf2_new = LHAPDF::xfx(1, x2, q, id2);
+	      //	      std::cout << x1 << " " << id1 << " " << x2 << " " << id2 << " " << q << " " <<xpdf1 << " " << xpdf2 << " " << xpdf1_new << " " << xpdf2_new << " ";
 	      double weight = xpdf1_new * xpdf2_new / (xpdf1 * xpdf2);
 	      pdf_weights.push_back(weight);
 	      if (weight > 1.0) pdfWeightUp += (1-weight) * (1-weight);
@@ -774,6 +897,11 @@ int main(int argc, char* argv[]){
 	  //      if (synchCutFlow){
 	  //	std::cout << event->eventNum << " " << event->eventRun << " " << event->eventLumiblock << " " << std::endl;
 	  //}
+	  //Do the Zpt reweighting here
+	  if (invertIsoCut){
+	    float zPT = (event->zPairLeptons.first+event->zPairLeptons.second).Pt();
+	    eventWeight *= zptSF(channel,zPT);
+	  }
 	  if (makeMVATree){
 	    zLep1Index = event->zPairIndex.first;
 	    zLep2Index = event->zPairIndex.second;
@@ -892,12 +1020,14 @@ int main(int argc, char* argv[]){
     HistogramPlotter plotObj = HistogramPlotter(legOrder,plotOrder,datasetInfos);
     plotObj.setLabelOne("CMS Preliminary");
     plotObj.setLabelTwo("Some amount of lumi");
-    plotObj.setPostfix(postfix);
+    plotObj.setPostfix("");
     plotObj.setOutputFolder(outFolder);
 
-    if (plots)
-      plotObj.plotHistos(plotsMap);
-  
+    for (unsigned int i = 0; i < plotsVec.size(); i++){
+      std::cout << plotsVec[i] << std::endl;
+      if (plots)
+	plotObj.plotHistos(plotsMap[plotsVec[i]]);
+    }
     
     std::vector<std::string> cutFlowLabels (4);
     cutFlowLabels = {"lepSel","zMass","jetSel","bTag"};
@@ -932,7 +1062,7 @@ int main(int argc, char* argv[]){
 	    systMask = systMask << 1;
 	    continue;
 	  }
-	  delete plotsMap[dataset->getFillHisto()+systNames[systInd]][stageNames[j]];
+	  delete plotsMap[systNames[systInd]][dataset->getFillHisto()][stageNames[j]];
 	  if (systInd > 0) systMask = systMask << 1;
 	}
       }

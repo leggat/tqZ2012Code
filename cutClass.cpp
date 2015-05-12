@@ -34,14 +34,18 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   looseMuonPt_(10),
   looseMuonEta_(2.4),
   looseMuonRelIso_(0.2),
+  //zMass cuts
+  invZMassCut_(15.),
   //Jet initialisation
   numJets_(2),
+  maxJets_(10),
   jetPt_(30.),
   jetEta_(2.5),
   jetNConsts_(2),
   jetIDDo_(true),
   //B-discriminator cut
   numbJets_(1),
+  maxbJets_(5),
   bDiscCut_(0.679), // Medium level
   //bDiscCut_(0.244), // Loose cut
   //Do plots?
@@ -52,8 +56,8 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   //Synchronisation cut flow.
   synchCutFlow_(lepCutFlow),
   //Dump event numbers?
-  makeEventDump_(dumpEventNumber),
   singleEventInfoDump_(false),
+  makeEventDump_(dumpEventNumber),
   //Set isMC. Default is true, but it's called everytime a new dataset is processed anyway.
   isMC_(true),
   //Same for trigger flag.
@@ -66,7 +70,10 @@ Cuts::Cuts(bool doPlots, bool fillCutFlows,bool invertIsoCut, bool lepCutFlow, b
   skipTrigger_(false),
   //Are we making b-tag efficiency plots?
   makeBTagEffPlots_(false),
-  getBTagWeight_(false)
+  getBTagWeight_(false),
+  //MET and mTW cuts go here.
+  metCut_(0.),
+  mTWCut_(0.)
 {
   //Space here in case other stuff needs to be done.
   //If doing synchronisation., initialise that here.
@@ -188,16 +195,24 @@ bool Cuts::makeCuts(AnalysisEvent *event, float *eventWeight, std::map<std::stri
   event->jetIndex = makeJetCuts(event, systToRun, eventWeight);
   if (doPlots_) plotMap["zMass"]->fillAllPlots(event,*eventWeight);
   if (event->jetIndex.size() < numJets_) return false;
+  if (event->jetIndex.size() > maxJets_) return false;
   
   if (doPlots_||fillCutFlow_) cutFlow->Fill(2.5,*eventWeight);
 
   event->bTagIndex = makeBCuts(event,event->jetIndex);
   if (doPlots_) plotMap["jetSel"]->fillAllPlots(event,*eventWeight);
   if (event->bTagIndex.size() < numbJets_) return false;
+  if (event->bTagIndex.size() > maxbJets_) return false;
 
   if (doPlots_) plotMap["bTag"]->fillAllPlots(event,*eventWeight);
   if (doPlots_||fillCutFlow_) cutFlow->Fill(3.5,*eventWeight);
 
+  //Apply met and mtw cuts here. By default these are 0, so don't do anything.
+  if (event->metPF2PATPt < metCut_) return false;
+  TLorentzVector tempMet;
+  tempMet.SetPtEtaPhiE(event->metPF2PATPt,0,event->metPF2PATPhi,event->metPF2PATEt);
+  float mtw = std::sqrt(2*event->metPF2PATPt*event->wLepton.Pt()*(1-cos(event->metPF2PATPhi - event->wLepton.Phi())));
+  if (mtw < mTWCut_) return false;
 
   return true;
 }
@@ -224,7 +239,7 @@ bool Cuts::makeLeptonCuts(AnalysisEvent* event,float * eventWeight,std::map<std:
     cutFlow->Fill(0.5,*eventWeight);
   }
 
-  if (fabs(invMass) > 10.) return false;
+  if (fabs(invMass) > invZMassCut_) return false;
 
   //  plotMap["zMass"]->fillAllPlots(event,eventWeight);
   if(doPlots_||fillCutFlow_) cutFlow->Fill(1.5,*eventWeight);
@@ -569,7 +584,7 @@ bool Cuts::synchCuts(AnalysisEvent* event){
   synchCutFlowHist_->Fill(2.5);
   if (makeEventDump_){dumpToFile(event,2);}
   if (singleEventInfoDump_) std::cout << "Z mass: " << getZCand(event,event->electronIndexTight,event->muonIndexTight) << std::endl;
-  if (fabs(getZCand(event,event->electronIndexTight,event->muonIndexTight)) > 15.) return false;
+  if (fabs(getZCand(event,event->electronIndexTight,event->muonIndexTight)) > invZMassCut_) return false;
   synchCutFlowHist_->Fill(3.5);
 
   //Add in extra steps here.
@@ -664,7 +679,7 @@ bool Cuts::invertIsoCut(AnalysisEvent* event,float *eventWeight,std::map<std::st
     event->zPairIndex.first = lep1.Pt() > lep2.Pt() ? event->electronIndexTight[0] : event->electronIndexTight[1];
     event->zPairLeptons.second = lep1.Pt() > lep2.Pt() ? lep2:lep1;
     event->zPairIndex.second = lep1.Pt() > lep2.Pt() ? event->electronIndexTight[1] : event->electronIndexTight[0];
-    invMass = (event->zPairLeptons.first + event->zPairLeptons.second).M() -91.2;
+    invMass = (event->zPairLeptons.first + event->zPairLeptons.second).M() -91.;
   }
   else{
     if (event->muonIndexTight.size() < 2) return false;
@@ -673,7 +688,7 @@ bool Cuts::invertIsoCut(AnalysisEvent* event,float *eventWeight,std::map<std::st
     event->zPairIndex.first = event->muonIndexTight[0];
     event->zPairLeptons.second = TLorentzVector(event->muonPF2PATPX[event->muonIndexTight[1]],event->muonPF2PATPY[event->muonIndexTight[1]],event->muonPF2PATPZ[event->muonIndexTight[1]],event->muonPF2PATE[event->muonIndexTight[1]]);
     event->zPairIndex.second = event->muonIndexTight[1];
-    invMass = (event->zPairLeptons.first + event->zPairLeptons.second).M() -91.2;
+    invMass = (event->zPairLeptons.first + event->zPairLeptons.second).M() -91.;
   }
   
   //Get rev iso candidates.
@@ -709,7 +724,7 @@ bool Cuts::invertIsoCut(AnalysisEvent* event,float *eventWeight,std::map<std::st
     cutFlow->Fill(0.5,*eventWeight);
   }
 
-  if (std::abs(invMass) > 10.) return false;
+  if (std::abs(invMass) > invZMassCut_) return false;
   if(doPlots_||fillCutFlow_) cutFlow->Fill(1.5,*eventWeight);
   return true;
 
