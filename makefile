@@ -1,54 +1,80 @@
-# Adding in a few variables to change up flags etc
+
+
+LIBRARY_SOURCES = $(wildcard src/common/*.cpp)
+LIBRARY_OBJECT_FILES = $(patsubst src/common/%.cpp,obj/%.o,${LIBRARY_SOURCES})
+LIBRARY = lib/libBdtPtTools.so
+
+
+EXECUTABLE_SOURCES = $(wildcard src/common/*.cxx)
+EXECUTABLE_OBJECT_FILES = $(patsubst src/common/%.cxx,obj/%.o,${EXECUTABLE_SOURCES})
+EXECUTABLES = $(patsubst src/common/%.cxx,bin/%.exe,${EXECUTABLE_SOURCES})
+
+LIBRARY_PATH = 	-L/home/eepgadm/root/lib \
+		-Llib
+		-L/home/eepgadm/lib/local/lib\
+
+LIBRARIES = 	-lCore \
+		-lCint  \
+		-lRIO  \
+		-lNet  \
+		-lHist  \
+		-lGraf  \
+		-lGraf3d  \
+		-lGpad  \
+		-lTMVA  \
+		-lTree  \
+		-lRint  \
+		-lPostscript  \
+		-lMatrix  \
+		-lPhysics  \
+		-lMathCore  \
+		-lThread  \
+		-pthread  \
+		-lm  \
+		-ldl \
+		-lconfig++ \
+
+INCLUDE_PATH = 	-Iinclude  \
+		-I/home/eepgadm/root/include \
+		-I/usr/include
 
 CFLAGS = -g -O2 -pipe -Wall -W -Woverloaded-virtual -MMD -MP -fPIC -pthread -std=c++0x $(shell root-config --cflags) ${INCLUDE_PATH}
+
 LHAPDFFLAGS = `lhapdf-config --cflags --ldflags`
 
-INCLUDE_PATH = 	-I$(shell root-config --incdir) \
-		-Iinclude  \
-		-I/home/eepgadm/lib/local/include \
-		-I/user/include
+LINK_LIBRARY_FLAGS = -shared -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES}
+LINK_EXECUTABLE_FLAGS = -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES} -lBdtPtTools
 
-LIBS = 	$(shell root-config --libs)\
-	 -L/home/eepgadm/lib/local/lib\
-	 -lconfig++ \
+.PHONY: all _all clean _cleanall build _buildall install _installall rpm _rpmall test _testall spec_update
 
-default: tbZAnal.exe MvaFilesEventWeightIntegral.exe
+default: build
 
 clean: _cleanall
 _cleanall:
-	rm -rf *.exe
-	rm -rf *.o
-	rm -rf *.d
+	rm -rf obj
+	rm -rf bin
+	rm -rf lib
 
-tbZAnal.exe: analysisMain.o config_parser.o dataset.o AnalysisEvent.o cutClass.o plots.o histogramPlotter.o
-	g++ $(CFLAGS) $(LIBS) $(LHAPDFFLAGS) -o tbZAnal.exe analysisMain.o config_parser.o dataset.o AnalysisEvent.o cutClass.o plots.o histogramPlotter.o
+all: _all
+build: _all
+buildall: _all
+_all: ${LIBRARY} ${EXECUTABLES}
 
-analysisMain.o: analysisMain.cpp config_parser.h dataset.h cutClass.h
-	g++ $(CFLAGS) $(LIBS) -c analysisMain.cpp
+${LIBRARY}: ${LIBRARY_OBJECT_FILES}
+	g++ ${LINK_LIBRARY_FLAGS} ${LIBRARY_OBJECT_FILES} -o $@
 
-config_parser.o: config_parser.h config_parser.cpp
-	g++ $(CFLAGS) $(LIBS) -c config_parser.cpp
+${LIBRARY_OBJECT_FILES}: obj/%.o : src/common/%.cpp
+	mkdir -p {bin,obj,lib}
+	g++ -c ${CFLAGS}  $< -o $@
 
-dataset.o: dataset.h dataset.cpp
-	g++ $(CFLAGS) ${LIBS} -c dataset.cpp
+-include $(LIBRARY_OBJECT_FILES:.o=.d)
 
-AnalysisEvent.o: AnalysisEvent.C AnalysisEvent.h
-	g++ $(CFLAGS) $(LIBS) -c AnalysisEvent.C
 
-cutClass.o: cutClass.cpp cutClass.h
-	g++ $(CFLAGS) $(LIBS) -c cutClass.cpp
+${EXECUTABLES}: bin/%.exe: obj/%.o ${EXECUTABLE_OBJECT_FILES}
+	g++ ${LINK_EXECUTABLE_FLAGS} $(LHAPDFFLAGS) $< -o $@
 
-plots.o: plots.cpp plots.h
-	g++ $(CFLAGS) $(LIBS) -c plots.cpp
+${EXECUTABLE_OBJECT_FILES}: obj/%.o : src/common/%.cxx
+	mkdir -p {bin,obj,lib}
+	g++ -c ${CFLAGS}  $< -o $@
 
-histogramPlotter.o: histogramPlotter.cpp histogramPlotter.h
-	g++ $(CFLAGS) $(LIBS) -c histogramPlotter.cpp
-
-MvaFilesEventWeightIntegral.exe: weightIntegralMacro.o SkimFileEvent.o
-	g++ $(CFLAGS) $(LIBS) -o MvaFilesEventWeightIntegral.exe weightIntegralMacro.o SkimFileEvent.o
-
-weightIntegralMacro.o: weightIntegralMacro.cpp SkimFileEvent.hpp
-	g++ $(CFLAGS) $(LIBS) -c weightIntegralMacro.cpp
-
-SkimFileEvent.o: SkimFileEvent.cpp SkimFileEvent.hpp
-	g++ $(CFLAGS) $(LIBS) -c SkimFileEvent.cpp
+-include $(EXECUTABLE_OBJECT_FILES:.o=.d)

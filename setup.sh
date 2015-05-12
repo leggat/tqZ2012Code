@@ -1,1 +1,1 @@
-export LD_LIBRARY_PATH=/home/eepgadm/lib/local/lib/
+export LD_LIBRARY_PATH="${LD_LIBRARY_PATH}:${PWD}/lib:/home/eepgadm/lib/local/lib/"
