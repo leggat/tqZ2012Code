@@ -32,7 +32,6 @@ LIBRARIES = 	-lCore \
 		-lconfig++ \
 		-lLHAPDF \
 		-lz \
-		-lg \
 
 INCLUDE_PATH = 	-Iinclude  \
 		-I/home/eepgadm/root/include \
@@ -42,6 +41,7 @@ INCLUDE_PATH = 	-Iinclude  \
 CFLAGS = -g -O2 -pipe -Wall -W -Woverloaded-virtual -MMD -MP -fPIC -pthread -std=c++0x $(shell root-config --cflags) ${INCLUDE_PATH}
 
 LHAPDFFLAGS = `lhapdf-config --cflags --ldflags`
+ROOTSYS = /home/eepgadm/root/
 
 LINK_LIBRARY_FLAGS = -shared -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES}
 LINK_EXECUTABLE_FLAGS = -Wall -g -O0 -rdynamic ${LIBRARY_PATH} ${LIBRARIES} -lTQZanalysisTools

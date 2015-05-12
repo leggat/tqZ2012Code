@@ -1,4 +1,4 @@
-#define _AnalysisEvent_cxx_
+#define AnalysisEvent_cxx
 #include "AnalysisEvent.hpp"
 #include <TH2.h>
 #include <TStyle.h>
@@ -45,3 +45,4 @@ void AnalysisEvent::Loop()
 float AnalysisEvent::getEventWeight(Long64_t entry){
   return 1.;
 }
+
