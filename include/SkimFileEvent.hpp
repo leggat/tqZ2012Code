@@ -386,6 +386,7 @@ public :
    Int_t           eventRun;
    Int_t           eventNum;
    Float_t         eventLumiblock;
+   Float_t         eventWeight;
 
    // List of branches
    TBranch        *b_numElePF2PAT;   //!
@@ -750,6 +751,7 @@ public :
    TBranch        *b_eventRun;   //!
    TBranch        *b_eventNum;   //!
    TBranch        *b_eventLumiblock;   //!
+   TBranch        *b_eventWeight;
 
    SkimFileEvent(TTree *tree=0);
    virtual ~SkimFileEvent();
@@ -1185,6 +1187,8 @@ void SkimFileEvent::Init(TTree *tree)
    fChain->SetBranchAddress("eventRun", &eventRun, &b_eventRun);
    fChain->SetBranchAddress("eventNum", &eventNum, &b_eventNum);
    fChain->SetBranchAddress("eventLumiblock", &eventLumiblock, &b_eventLumiblock);
+   fChain->SetBranchAddress("eventWeight", &eventWeight, &b_eventWeight);
+
    Notify();
 }
 
