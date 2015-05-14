@@ -1084,9 +1084,15 @@ float Cuts::muonSF(float pt, float eta){
 }
 
 void Cuts::initialiseJECCors(){
-  std::ifstream jecFile("Summer13_V5_MC_Uncertainty_AK5PFchs.txt");
+  std::ifstream jecFile("scripts/Summer13_V5_MC_Uncertainty_AK5PFchs.txt");
   std::string line;
   bool first = true;
+
+  if (!jecFile.is_open()){
+    std::cout << "Unable to open jecFile." << std::endl;
+    exit(0);
+  }
+
   while(getline(jecFile,line)){
     std::vector<std::string> tempVec;
     std::stringstream lineStream(line);
@@ -1096,6 +1102,7 @@ void Cuts::initialiseJECCors(){
     }
     std::vector<float> tempUp;
     std::vector<float> tempDown;
+
     etaMinJEC_.push_back(atof(tempVec[0].c_str()));
     etaMaxJEC_.push_back(atof(tempVec[1].c_str()));
     for (unsigned int i = 1; i < tempVec.size()/3; i++){
@@ -1130,6 +1137,7 @@ float Cuts::getJECUncertainty(float pt, float eta, int syst){
       break;
     }
   }
+
   float lowFact = (syst==4?jecSFUp_[etaBin][ptBin]:jecSFDown_[etaBin][ptBin]);
   float hiFact = (syst==4?jecSFUp_[etaBin][ptBin+1]:jecSFDown_[etaBin][ptBin+1]);
   //Now do some interpolation
